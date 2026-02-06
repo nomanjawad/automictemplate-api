@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auth Debug</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+  <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
+    <h1 class="text-2xl font-bold mb-4">Authentication Debug Page</h1>
+
+    <div class="space-y-4">
+      <div class="border-b pb-4">
+        <h2 class="text-lg font-semibold mb-2">Current Session Status</h2>
+        <div id="sessionStatus" class="font-mono text-sm bg-gray-50 p-4 rounded"></div>
+      </div>
+
+      <div class="border-b pb-4">
+        <h2 class="text-lg font-semibold mb-2">localStorage Content</h2>
+        <div id="localStorageContent" class="font-mono text-sm bg-gray-50 p-4 rounded"></div>
+      </div>
+
+      <div class="border-b pb-4">
+        <h2 class="text-lg font-semibold mb-2">sessionStorage Content</h2>
+        <div id="sessionStorageContent" class="font-mono text-sm bg-gray-50 p-4 rounded"></div>
+      </div>
+
+      <div class="border-b pb-4">
+        <h2 class="text-lg font-semibold mb-2">Console Logs</h2>
+        <div id="consoleLogs" class="font-mono text-xs bg-gray-900 text-green-400 p-4 rounded max-h-96 overflow-auto"></div>
+      </div>
+
+      <div class="flex gap-2">
+        <button onclick="refreshDebug()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+          Refresh Debug Info
+        </button>
+        <button onclick="clearStorage()" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+          Clear All Storage
+        </button>
+        <button onclick="testLogin()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+          Test Login
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    const consoleLogs = [];
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
+    const originalConsoleWarn = console.warn;
+
+    // Intercept console logs
+    console.log = function(...args) {
+      consoleLogs.push({ type: 'log', message: args.join(' '), time: new Date().toLocaleTimeString() });
+      updateConsoleLogs();
+      originalConsoleLog.apply(console, args);
+    };
+
+    console.error = function(...args) {
+      consoleLogs.push({ type: 'error', message: args.join(' '), time: new Date().toLocaleTimeString() });
+      updateConsoleLogs();
+      originalConsoleError.apply(console, args);
+    };
+
+    console.warn = function(...args) {
+      consoleLogs.push({ type: 'warn', message: args.join(' '), time: new Date().toLocaleTimeString() });
+      updateConsoleLogs();
+      originalConsoleWarn.apply(console, args);
+    };
+
+    function updateConsoleLogs() {
+      const logsDiv = document.getElementById('consoleLogs');
+      logsDiv.innerHTML = consoleLogs.map(log => {
+        const color = log.type === 'error' ? 'text-red-400' : log.type === 'warn' ? 'text-yellow-400' : 'text-green-400';
+        return `<div class="${color}">[${log.time}] ${log.message}</div>`;
+      }).join('');
+      logsDiv.scrollTop = logsDiv.scrollHeight;
+    }
+
+    function refreshDebug() {
+      console.log('=== Refreshing debug info ===');
+
+      // Check session status
+      const sessionStatus = document.getElementById('sessionStatus');
+      const isAuth = auth.isAuthenticated();
+      const user = auth.getUser();
+      const token = auth.getAccessToken();
+
+      sessionStatus.innerHTML = `
+        <div><strong>isAuthenticated():</strong> ${isAuth}</div>
+        <div><strong>Has User:</strong> ${!!user}</div>
+        <div><strong>Has Token:</strong> ${!!token}</div>
+        ${user ? `<div><strong>User Email:</strong> ${user.email}</div>` : ''}
+        ${token ? `<div><strong>Token (first 20):</strong> ${token.substring(0, 20)}...</div>` : ''}
+        ${auth.session ? `<div><strong>Expires At:</strong> ${auth.session.expires_at}</div>` : ''}
+      `;
+
+      // Show localStorage
+      const localStorageDiv = document.getElementById('localStorageContent');
+      const authSession = localStorage.getItem('auth_session');
+      if (authSession) {
+        try {
+          const parsed = JSON.parse(authSession);
+          localStorageDiv.textContent = JSON.stringify(parsed, null, 2);
+        } catch (e) {
+          localStorageDiv.textContent = `Parse error: ${e.message}\nRaw: ${authSession}`;
+        }
+      } else {
+        localStorageDiv.textContent = 'No auth_session found';
+      }
+
+      // Show sessionStorage
+      const sessionStorageDiv = document.getElementById('sessionStorageContent');
+      const redirect = sessionStorage.getItem('auth_redirect');
+      sessionStorageDiv.textContent = redirect ? `auth_redirect: ${redirect}` : 'No auth_redirect found';
+
+      console.log('Debug info refreshed');
+    }
+
+    function clearStorage() {
+      console.log('=== Clearing all storage ===');
+      localStorage.clear();
+      sessionStorage.clear();
+      auth.clearSession();
+      console.log('Storage cleared');
+      refreshDebug();
+    }
+
+    async function testLogin() {
+      const email = prompt('Enter email:');
+      const password = prompt('Enter password:');
+
+      if (!email || !password) {
+        console.error('Email and password required');
+        return;
+      }
+
+      console.log('=== Testing login ===');
+      console.log('Email:', email);
+
+      const result = await auth.login(email, password);
+      console.log('Login result:', result);
+
+      if (result.success) {
+        console.log('✅ Login successful!');
+        refreshDebug();
+      } else {
+        console.error('❌ Login failed:', result.error);
+      }
+    }
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('=== Debug page loaded ===');
+      refreshDebug();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+{
+  "[typescript]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  },
+  "cSpell.diagnosticLevel": "Hint",
+  "cSpell.words": [
+    "Aljouf",
+    "Alsad",
+    "Alsulaiteenv",
+    "Alyahya",
+    "amco",
+    "Anamul",
+    "Arbaid",
+    "ATCE",
+    "Baytur",
+    "Bmet",
+    "Brookfield",
+    "Consolas",
+    "Daam",
+    "embla",
+    "Emdad",
+    "Esad",
+    "Ewan",
+    "Fahad",
+    "Gazi",
+    "Geolocation",
+    "GSAP",
+    "Hanif",
+    "Hoque",
+    "Ibne",
+    "ipapi",
+    "Ivta",
+    "Jabbar",
+    "Jawahr",
+    "JetBrains",
+    "Jidah",
+    "Jouf",
+    "Limark",
+    "Meadown",
+    "Medgulf",
+    "METSCCO",
+    "morphism",
+    "Mutairi",
+    "Noman",
+    "Nsda",
+    "oninverse",
+    "partialize",
+    "petroserv",
+    "Petrosev",
+    "Sayed",
+    "Senyar",
+    "Skytech",
+    "TRAGS",
+    "vercel",
+    "Zaman"
+  ],
+  "deno.enablePaths": [
+    "supabase/functions"
+  ],
+  "deno.lint": true,
+  "deno.unstable": [
+    "bare-node-builtins",
+    "byonm",
+    "sloppy-imports",
+    "unsafe-proto",
+    "webgpu",
+    "broadcast-channel",
+    "worker-options",
+    "cron",
+    "kv",
+    "ffi",
+    "fs",
+    "http",
+    "net"
+  ],
+  "fileHeaderComment.parameter": {
+    "*": {
+      "company": "Noman Jawad",
+      "note": "All rights reserved"
+    }
+  },
+  "fileHeaderComment.template": {
+    "*": [
+      "${commentbegin}",
+      "${commentprefix} ${filename}",
+      "${commentprefix} Created by ${author}",
+      "${commentprefix} Copyright (c) ${year} ${company}",
+      "${commentprefix} ${note}",
+      "${commentend}"
+    ]
+  },
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  "prettier.semi": false
+}

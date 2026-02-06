@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Page Editor - Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+        }
+
+        .section h2 {
+            color: #444;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        input[type="url"],
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        input[type="text"]:focus,
+        input[type="url"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .optional {
+            color: #999;
+            font-size: 12px;
+        }
+
+        .button-group {
+            margin-top: 30px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #45a049;
+        }
+
+        .btn-secondary {
+            background: #2196F3;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #0b7dda;
+        }
+
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #da190b;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+
+        .json-view {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4CAF50;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 20px;">
+            <div>
+                <h1 style="margin-bottom: 5px;">🏠 Home Page Editor</h1>
+                <p class="subtitle">Edit your home page content using the HomePageSchema validation</p>
+            </div>
+            <div style="text-align: right;">
+                <button onclick="handleLogout()" class="btn-danger" style="padding: 8px 16px; font-size: 13px;">
+                    🚪 Logout
+                </button>
+            </div>
+        </div>
+
+        <div id="status" class="status"></div>
+        <div id="loading" class="loading"><div class="spinner"></div><p>Loading...</p></div>
+
+        <form id="homePageForm">
+            <!-- Page Title (Optional) -->
+            <div class="section">
+                <h2>Page Title</h2>
+                <div class="form-group">
+                    <label for="title">Title <span class="optional">(optional)</span></label>
+                    <input type="text" id="title" name="title" placeholder="Welcome to SkyTech">
+                </div>
+            </div>
+
+            <!-- Banner (Required) -->
+            <div class="section">
+                <h2>Banner Section *</h2>
+                <div class="form-group">
+                    <label for="banner-title">Banner Title *</label>
+                    <input type="text" id="banner-title" name="banner.title" required placeholder="Welcome to Our Website">
+                </div>
+                <div class="form-group">
+                    <label for="banner-description">Description <span class="optional">(optional)</span></label>
+                    <textarea id="banner-description" name="banner.description" placeholder="We build amazing things..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="banner-backgroundImageUrl">Background Image URL <span class="optional">(optional)</span></label>
+                    <input type="url" id="banner-backgroundImageUrl" name="banner.backgroundImageUrl" placeholder="https://example.com/bg.jpg">
+                </div>
+                <div class="form-group">
+                    <label for="banner-heroImageUrl">Hero Image URL <span class="optional">(optional)</span></label>
+                    <input type="url" id="banner-heroImageUrl" name="banner.heroImageUrl" placeholder="https://example.com/hero.jpg">
+                </div>
+                <div class="form-group">
+                    <label for="banner-button-text">Button Text <span class="optional">(optional)</span></label>
+                    <input type="text" id="banner-button-text" name="banner.button.text" placeholder="Get Started">
+                </div>
+                <div class="form-group">
+                    <label for="banner-button-url">Button URL <span class="optional">(required if button text is provided)</span></label>
+                    <input type="url" id="banner-button-url" name="banner.button.url" placeholder="/contact">
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button type="submit" class="btn-primary">💾 Save Home Page</button>
+                <button type="button" id="loadBtn" class="btn-secondary">📥 Load Current Data</button>
+                <button type="button" id="clearBtn" class="btn-danger">🗑️ Clear Form</button>
+            </div>
+        </form>
+
+        <div class="section" style="margin-top: 30px;">
+            <h2>📋 Current JSON Preview</h2>
+            <div id="jsonPreview" class="json-view">Click "Load Current Data" to see the current page data</div>
+        </div>
+    </div>
+
+    <script src="/js/auth.js?v=3"></script>
+    <script src="/js/api.js?v=3"></script>
+    <script>
+        const PAGE_SLUG = 'home';
+
+        // Debug: Check what's loaded
+        console.log('Script execution:', {
+            authLoaded: typeof auth !== 'undefined',
+            apiLoaded: typeof api !== 'undefined',
+            windowAuth: typeof window.auth !== 'undefined',
+            windowApi: typeof window.api !== 'undefined'
+        });
+
+        function showStatus(message, type = 'success') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 5000);
+        }
+
+        function showLoading(show = true) {
+            document.getElementById('loading').className = show ? 'loading active' : 'loading';
+        }
+
+        function updateJsonPreview(data) {
+            document.getElementById('jsonPreview').textContent = JSON.stringify(data, null, 2);
+        }
+
+        // Convert form data to nested object structure
+        function formDataToObject(formData) {
+            const obj = {};
+
+            for (const [key, value] of formData.entries()) {
+                if (!value) continue; // Skip empty values
+
+                const keys = key.split('.');
+                let current = obj;
+
+                for (let i = 0; i < keys.length - 1; i++) {
+                    if (!current[keys[i]]) {
+                        current[keys[i]] = {};
+                    }
+                    current = current[keys[i]];
+                }
+
+                current[keys[keys.length - 1]] = value;
+            }
+
+            return obj;
+        }
+
+        // Load current page data
+        async function loadPageData() {
+            console.log('Loading page data for:', PAGE_SLUG);
+            showLoading(true);
+
+            try {
+                const result = await api.getPage(PAGE_SLUG);
+                console.log('API result:', result);
+
+                if (!result.success) {
+                    if (result.status === 404) {
+                        showStatus('ℹ️ No home page data found. Create a new one by filling the form.', 'error');
+                        updateJsonPreview({ message: 'No data found' });
+                        return;
+                    }
+                    throw new Error(result.error || 'Failed to load page data');
+                }
+
+                const pageData = result.data.data;
+                console.log('Page data:', pageData);
+
+                // Update JSON preview
+                updateJsonPreview(pageData);
+
+                // Populate form
+                if (pageData.data) {
+                    populateForm(pageData.data);
+                }
+                if (pageData.title) {
+                    document.getElementById('title').value = pageData.title;
+                }
+
+                showStatus('✅ Page data loaded successfully!', 'success');
+            } catch (error) {
+                console.error('Load error:', error);
+                showStatus(`❌ Error loading page: ${error.message}`, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Populate form from object
+        function populateForm(data) {
+            // Title
+            if (data.title) document.getElementById('title').value = data.title;
+
+            // Banner
+            if (data.banner) {
+                if (data.banner.title) document.getElementById('banner-title').value = data.banner.title;
+                if (data.banner.description) document.getElementById('banner-description').value = data.banner.description;
+                if (data.banner.backgroundImageUrl) document.getElementById('banner-backgroundImageUrl').value = data.banner.backgroundImageUrl;
+                if (data.banner.heroImageUrl) document.getElementById('banner-heroImageUrl').value = data.banner.heroImageUrl;
+                if (data.banner.button) {
+                    if (data.banner.button.text) document.getElementById('banner-button-text').value = data.banner.button.text;
+                    if (data.banner.button.url) document.getElementById('banner-button-url').value = data.banner.button.url;
+                }
+            }
+        }
+
+        // Save page data
+        async function savePageData(event) {
+            event.preventDefault();
+            console.log('Save function called');
+            showLoading(true);
+
+            const form = document.getElementById('homePageForm');
+            const formData = new FormData(form);
+            const data = formDataToObject(formData);
+
+            // Get title from form
+            const title = document.getElementById('title').value || 'Home Page';
+
+            const payload = {
+                title: title,
+                data: data,
+                published: true,
+                meta_data: {
+                    metaTitle: title,
+                    metaDescription: data.banner?.description || 'Welcome to our website'
+                }
+            };
+
+            console.log('Payload to save:', payload);
+
+            try {
+                const result = await api.upsertPage(PAGE_SLUG, payload);
+                console.log('Save result:', result);
+
+                if (!result.success) {
+                    if (result.status === 401 || result.status === 403) {
+                        showStatus('⚠️ Session expired. Please login again.', 'error');
+                        setTimeout(() => {
+                            window.location.href = '/login.html';
+                        }, 2000);
+                        return;
+                    }
+                    throw new Error(result.error || 'Failed to save page');
+                }
+
+                updateJsonPreview(result.data.data);
+                showStatus('✅ Home page saved successfully!', 'success');
+            } catch (error) {
+                console.error('Save error:', error);
+                showStatus(`❌ Error saving page: ${error.message}`, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Clear form
+        function clearForm() {
+            if (confirm('Are you sure you want to clear the form?')) {
+                document.getElementById('homePageForm').reset();
+                showStatus('Form cleared', 'success');
+            }
+        }
+
+        // Logout handler
+        async function handleLogout() {
+            if (confirm('Are you sure you want to logout?')) {
+                await auth.logout();
+                window.location.href = '/login.html';
+            }
+        }
+
+        // Initialize when DOM AND external scripts are ready
+        function initializeApp() {
+            console.log('Initializing app...');
+
+            // Check if dependencies are loaded
+            if (typeof auth === 'undefined') {
+                console.error('Auth not loaded, retrying...');
+                setTimeout(initializeApp, 100);
+                return;
+            }
+
+            if (typeof api === 'undefined') {
+                console.error('API client not loaded, retrying...');
+                setTimeout(initializeApp, 100);
+                return;
+            }
+
+            console.log('Dependencies loaded successfully');
+
+            // Check authentication first
+            if (!auth.isAuthenticated()) {
+                console.log('Not authenticated, redirecting to login...');
+                sessionStorage.setItem('auth_redirect', window.location.pathname);
+                window.location.href = '/login.html';
+                return;
+            }
+
+            console.log('User authenticated, proceeding...');
+
+            // Add user info to header
+            const user = auth.getUser();
+            if (user) {
+                console.log('User:', user);
+                const subtitle = document.querySelector('.subtitle');
+                subtitle.innerHTML += `<br><small style="color: #666;">Logged in as: ${user.email}</small>`;
+            } else {
+                console.warn('No user data found in session');
+            }
+
+            console.log('Setting up event listeners...');
+
+            // Event listeners
+            const form = document.getElementById('homePageForm');
+            const loadBtn = document.getElementById('loadBtn');
+            const clearBtn = document.getElementById('clearBtn');
+
+            if (form) {
+                form.addEventListener('submit', savePageData);
+                console.log('Form submit listener attached');
+            } else {
+                console.error('Form not found!');
+            }
+
+            if (loadBtn) {
+                loadBtn.addEventListener('click', loadPageData);
+                console.log('Load button listener attached');
+            }
+
+            if (clearBtn) {
+                clearBtn.addEventListener('click', clearForm);
+                console.log('Clear button listener attached');
+            }
+
+            // Auto-load on page load
+            console.log('Auto-loading page data...');
+            loadPageData();
+        }
+
+        // Start initialization when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            // DOM already loaded
+            initializeApp();
+        }
+    </script>
+</body>
+</html>

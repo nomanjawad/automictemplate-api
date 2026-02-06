@@ -1,0 +1,442 @@
+{
+  "info": {
+    "name": "SkyTech Backend API",
+    "description": "Complete API collection for SkyTech Node Backend with JWT authentication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('token', response.session.access_token);",
+                  "    pm.environment.set('token', response.session.access_token);",
+                  "    console.log('Token saved:', response.session.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"full_name\": \"Test User\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Register a new user account"
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('token', response.session.access_token);",
+                  "    pm.environment.set('token', response.session.access_token);",
+                  "    console.log('Token saved:', response.session.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Login with email and password. Token is automatically saved."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify"]
+            },
+            "description": "Verify JWT token using Supabase authentication"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "profile"]
+            },
+            "description": "Get current user profile"
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Logout current session"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Content Pages",
+      "item": [
+        {
+          "name": "Get All Pages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/content/pages",
+              "host": ["{{baseUrl}}"],
+              "path": ["content", "pages"]
+            },
+            "description": "Get all content pages (public)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Page by Slug",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/content/pages/home",
+              "host": ["{{baseUrl}}"],
+              "path": ["content", "pages", "home"]
+            },
+            "description": "Get a specific page by slug"
+          },
+          "response": []
+        },
+        {
+          "name": "Create/Update Home Page",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Home Page\",\n  \"data\": {\n    \"banner\": {\n      \"title\": \"Welcome to SkyTech\",\n      \"description\": \"We build amazing things\",\n      \"backgroundImageUrl\": \"https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920\",\n      \"heroImageUrl\": \"https://images.unsplash.com/photo-1573164713988-8665fc963095?w=800\",\n      \"button\": {\n        \"text\": \"Get Started\",\n        \"url\": \"/contact\"\n      }\n    }\n  },\n  \"meta_data\": {\n    \"metaTitle\": \"Home - SkyTech\",\n    \"metaDescription\": \"We build amazing things\"\n  },\n  \"published\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/content/pages/home",
+              "host": ["{{baseUrl}}"],
+              "path": ["content", "pages", "home"]
+            },
+            "description": "Create or update the home page"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Page",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/content/pages/test-page",
+              "host": ["{{baseUrl}}"],
+              "path": ["content", "pages", "test-page"]
+            },
+            "description": "Delete a page by slug"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Common Content",
+      "item": [
+        {
+          "name": "Get All Common Content",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/content/common",
+              "host": ["{{baseUrl}}"],
+              "path": ["content", "common"]
+            },
+            "description": "Get all common content items"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Common Content by Key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/content/common/site-settings",
+              "host": ["{{baseUrl}}"],
+              "path": ["content", "common", "site-settings"]
+            },
+            "description": "Get specific common content by key"
+          },
+          "response": []
+        },
+        {
+          "name": "Create/Update Common Content",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Site Settings\",\n  \"data\": {\n    \"siteName\": \"SkyTech\",\n    \"tagline\": \"Building the Future\",\n    \"contactEmail\": \"info@skytech.com\",\n    \"phone\": \"+1 234 567 8900\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/content/common/site-settings",
+              "host": ["{{baseUrl}}"],
+              "path": ["content", "common", "site-settings"]
+            },
+            "description": "Create or update common content"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Blog",
+      "item": [
+        {
+          "name": "Get All Blog Posts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/blog?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["blog"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Get all blog posts with pagination"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Blog Post by Slug",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/blog/my-first-post",
+              "host": ["{{baseUrl}}"],
+              "path": ["blog", "my-first-post"]
+            },
+            "description": "Get a specific blog post"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Blog Post",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slug\": \"my-first-post\",\n  \"title\": \"My First Blog Post\",\n  \"excerpt\": \"This is a short excerpt of the blog post\",\n  \"content\": \"This is the full content of the blog post. It can be quite long with multiple paragraphs.\",\n  \"featured_image\": \"https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=800\",\n  \"categories\": [\"technology\", \"news\"],\n  \"tags\": [\"javascript\", \"web\"],\n  \"published\": true,\n  \"published_at\": \"2025-12-11T10:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/blog",
+              "host": ["{{baseUrl}}"],
+              "path": ["blog"]
+            },
+            "description": "Create a new blog post"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Blog Post",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"My Updated Blog Post\",\n  \"excerpt\": \"This is an updated excerpt\",\n  \"content\": \"This is the updated content\",\n  \"published\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/blog/my-first-post",
+              "host": ["{{baseUrl}}"],
+              "path": ["blog", "my-first-post"]
+            },
+            "description": "Update an existing blog post"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Blog Post",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/blog/my-first-post",
+              "host": ["{{baseUrl}}"],
+              "path": ["blog", "my-first-post"]
+            },
+            "description": "Delete a blog post"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health & Status",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Check API and database health"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

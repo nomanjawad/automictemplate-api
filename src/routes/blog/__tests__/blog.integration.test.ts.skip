@@ -1,0 +1,233 @@
+/**
+ * Integration tests for Blog API endpoints
+ */
+
+import { describe, it, expect, jest } from '@jest/globals'
+import request from 'supertest'
+import app from '../../../app.js'
+import { createMockBlogPost } from '../../../__tests__/helpers.js'
+import { supabaseClient } from '../../../db/supabaseClient.js'
+
+// Mock the Supabase client
+jest.mock('../../../db/supabaseClient', () => ({
+  supabaseClient: {
+    from: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    insert: jest.fn().mockReturnThis(),
+    update: jest.fn().mockReturnThis(),
+    delete: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    single: jest.fn().mockReturnThis(),
+    order: jest.fn().mockReturnThis(),
+    range: jest.fn().mockReturnThis(),
+  },
+}))
+
+// Mock the auth middleware
+jest.mock('../../../middleware/auth', () => ({
+  requireAuth: (req: any, res: any, next: any) => {
+    req.user = { id: 'test-user-id', email: 'test@example.com' }
+    next()
+  },
+  optionalAuth: (req: any, res: any, next: any) => {
+    req.user = null
+    next()
+  },
+}))
+
+describe('Blog API Integration Tests', () => {
+  describe('GET /api/blog', () => {
+    it('should return a list of published blog posts', async () => {
+      const mockPosts = [
+        createMockBlogPost({ id: '1', published: true }),
+        createMockBlogPost({ id: '2', published: true }),
+      ]
+
+      ;(supabaseClient!.select as any).mockResolvedValueOnce({
+        data: mockPosts,
+        error: null,
+        count: 2,
+      })
+
+      const response = await request(app)
+        .get('/api/blog')
+        .query({ limit: 10, offset: 0 })
+
+      expect(response.status).toBe(200)
+      expect(response.body.success).toBe(true)
+      expect(response.body.data).toHaveLength(2)
+      expect(response.body.count).toBe(2)
+    })
+
+    it('should handle pagination parameters', async () => {
+      ;(supabaseClient.select as any).mockResolvedValueOnce({
+        data: [],
+        error: null,
+        count: 0,
+      })
+
+      const response = await request(app)
+        .get('/api/blog')
+        .query({ limit: 5, offset: 10 })
+
+      expect(response.status).toBe(200)
+      expect(supabaseClient!.range).toHaveBeenCalledWith(10, 14)
+    })
+
+    it('should validate query parameters', async () => {
+      const response = await request(app)
+        .get('/api/blog')
+        .query({ limit: 'invalid' })
+
+      expect(response.status).toBe(422)
+      expect(response.body.error).toContain('Validation failed')
+    })
+  })
+
+  describe('GET /api/blog/:slug', () => {
+    it('should return a blog post by slug', async () => {
+      const mockPost = createMockBlogPost({ slug: 'test-post' })
+
+      ;(supabaseClient!.single as any).mockResolvedValueOnce({
+        data: mockPost,
+        error: null,
+      })
+
+      const response = await request(app).get('/api/blog/test-post')
+
+      expect(response.status).toBe(200)
+      expect(response.body.success).toBe(true)
+      expect(response.body.data.slug).toBe('test-post')
+    })
+
+    it('should return 404 if post not found', async () => {
+      ;(supabaseClient!.single as any).mockResolvedValueOnce({
+        data: null,
+        error: { code: 'PGRST116' },
+      })
+
+      const response = await request(app).get('/api/blog/nonexistent')
+
+      expect(response.status).toBe(404)
+    })
+  })
+
+  describe('POST /api/blog', () => {
+    it('should create a new blog post', async () => {
+      const newPost = {
+        slug: 'new-post',
+        title: 'New Post',
+        excerpt: 'Test excerpt',
+        content: { body: 'Content' },
+        published: false,
+      }
+
+      const mockCreatedPost = createMockBlogPost(newPost)
+
+      ;(supabaseClient!.select as any).mockResolvedValueOnce({
+        data: [mockCreatedPost],
+        error: null,
+      })
+
+      const response = await request(app)
+        .post('/api/blog')
+        .send(newPost)
+
+      expect(response.status).toBe(201)
+      expect(response.body.success).toBe(true)
+      expect(response.body.data.slug).toBe('new-post')
+    })
+
+    it('should validate required fields', async () => {
+      const response = await request(app)
+        .post('/api/blog')
+        .send({ title: 'Missing slug and content' })
+
+      expect(response.status).toBe(422)
+      expect(response.body.error).toContain('Validation failed')
+    })
+
+    it('should validate slug format', async () => {
+      const response = await request(app)
+        .post('/api/blog')
+        .send({
+          slug: 'Invalid Slug!',
+          title: 'Test',
+          content: {},
+        })
+
+      expect(response.status).toBe(422)
+    })
+  })
+
+  describe('PUT /api/blog/:slug', () => {
+    it('should update a blog post', async () => {
+      const updates = { title: 'Updated Title' }
+      const mockUpdatedPost = createMockBlogPost({ ...updates, slug: 'test-post' })
+
+      // First call for finding by slug
+      ;(supabaseClient!.single as any).mockResolvedValueOnce({
+        data: createMockBlogPost({ slug: 'test-post' }),
+        error: null,
+      })
+
+      // Second call for update
+      ;(supabaseClient!.select as any).mockResolvedValueOnce({
+        data: [mockUpdatedPost],
+        error: null,
+      })
+
+      const response = await request(app)
+        .put('/api/blog/test-post')
+        .send(updates)
+
+      expect(response.status).toBe(200)
+      expect(response.body.success).toBe(true)
+      expect(response.body.data.title).toBe('Updated Title')
+    })
+
+    it('should return 404 if post not found', async () => {
+      ;(supabaseClient!.single as any).mockResolvedValueOnce({
+        data: null,
+        error: { code: 'PGRST116' },
+      })
+
+      const response = await request(app)
+        .put('/api/blog/nonexistent')
+        .send({ title: 'Updated' })
+
+      expect(response.status).toBe(404)
+    })
+  })
+
+  describe('DELETE /api/blog/:slug', () => {
+    it('should delete a blog post', async () => {
+      // First call for finding by slug
+      ;(supabaseClient!.single as any).mockResolvedValueOnce({
+        data: createMockBlogPost({ slug: 'test-post' }),
+        error: null,
+      })
+
+      // Second call for delete
+      ;(supabaseClient!.delete as any).mockResolvedValueOnce({
+        error: null,
+      })
+
+      const response = await request(app).delete('/api/blog/test-post')
+
+      expect(response.status).toBe(200)
+      expect(response.body.success).toBe(true)
+    })
+
+    it('should return 404 if post not found', async () => {
+      ;(supabaseClient!.single as any).mockResolvedValueOnce({
+        data: null,
+        error: { code: 'PGRST116' },
+      })
+
+      const response = await request(app).delete('/api/blog/nonexistent')
+
+      expect(response.status).toBe(404)
+    })
+  })
+})

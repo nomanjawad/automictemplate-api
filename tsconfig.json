@@ -1,0 +1,83 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "nodenext",
+        "lib": [
+            "ES2022"
+        ],
+        "outDir": "dist",
+        "rootDir": "src",
+        "paths": {
+            "@controllers": [
+                "./src/controllers/index.ts"
+            ],
+            "@controllers/*": [
+                "./src/controllers/*"
+            ],
+            "@db": [
+                "./src/db/index.ts"
+            ],
+            "@db/*": [
+                "./src/db/*"
+            ],
+            "@middleware": [
+                "./src/middleware/index.ts"
+            ],
+            "@middleware/*": [
+                "./src/middleware/*"
+            ],
+            "@repositories": [
+                "./src/repositories/index.ts"
+            ],
+            "@repositories/*": [
+                "./src/repositories/*"
+            ],
+            "@routes/*": [
+                "./src/routes/*"
+            ],
+            "@types": [
+                "./src/types/index.ts"
+            ],
+            "@types/*": [
+                "./src/types/*"
+            ],
+            "@utils": [
+                "./src/utils/index.ts"
+            ],
+            "@utils/*": [
+                "./src/utils/*"
+            ],
+            "@validators": [
+                "./src/validators/index.ts"
+            ],
+            "@validators/*": [
+                "./src/validators/*"
+            ],
+            "@config": [
+                "./src/config/index.ts"
+            ]
+        },
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true,
+        "strict": true,
+        "skipLibCheck": true,
+        "moduleResolution": "nodenext",
+        "resolveJsonModule": true,
+        "noImplicitAny": true,
+        "strictNullChecks": true,
+        "isolatedModules": true,
+        "types": [
+            "node"
+        ]
+    },
+    "include": [
+        "src/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "src/**/__tests__/**",
+        "src/**/*.test.ts",
+        "src/**/*.spec.ts"
+    ]
+}

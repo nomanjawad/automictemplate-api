@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skytech Backend Template</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+  <div class="container mx-auto px-4 py-16">
+    <div class="max-w-4xl mx-auto">
+      <!-- Header -->
+      <div class="text-center mb-12">
+        <h1 class="text-5xl font-bold text-gray-800 mb-4">Skytech Backend Template</h1>
+        <p class="text-xl text-gray-600">Modern Node.js + Express + Supabase Backend</p>
+      </div>
+
+      <!-- Status Card -->
+      <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-2xl font-bold text-gray-800">System Status</h2>
+          <span id="statusBadge" class="px-4 py-2 rounded-full text-sm font-semibold">
+            Checking...
+          </span>
+        </div>
+
+        <div id="statusDetails" class="space-y-4">
+          <div class="animate-pulse text-gray-500">Loading system status...</div>
+        </div>
+      </div>
+
+      <!-- Quick Links -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <!-- Auth Pages -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+          <h3 class="text-xl font-bold text-gray-800 mb-4">Authentication</h3>
+          <div class="space-y-3">
+            <a href="/register.html" class="block w-full text-center bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition duration-200">
+              Create Account
+            </a>
+            <a href="/login.html" class="block w-full text-center bg-white text-indigo-600 border-2 border-indigo-600 py-3 rounded-lg font-semibold hover:bg-indigo-50 transition duration-200">
+              Sign In
+            </a>
+          </div>
+        </div>
+
+        <!-- API Endpoints -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+          <h3 class="text-xl font-bold text-gray-800 mb-4">API Endpoints</h3>
+          <div class="space-y-2">
+            <a href="/api/health" target="_blank" class="block text-blue-600 hover:text-blue-700 font-medium">
+              → GET /api/health
+            </a>
+            <a href="/api/admin/status" target="_blank" class="block text-blue-600 hover:text-blue-700 font-medium">
+              → GET /api/admin/status
+            </a>
+            <div class="text-gray-600 font-medium">
+              → POST /api/auth/register
+            </div>
+            <div class="text-gray-600 font-medium">
+              → POST /api/auth/login
+            </div>
+            <div class="text-gray-600 font-medium">
+              → POST /api/auth/logout
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Features Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-xl shadow-lg p-6 text-center">
+          <div class="text-4xl mb-3">🔐</div>
+          <h4 class="font-bold text-gray-800 mb-2">Supabase Auth</h4>
+          <p class="text-sm text-gray-600">Built-in authentication with JWT tokens</p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg p-6 text-center">
+          <div class="text-4xl mb-3">⚡</div>
+          <h4 class="font-bold text-gray-800 mb-2">TypeScript</h4>
+          <p class="text-sm text-gray-600">Type-safe development with modern ES modules</p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg p-6 text-center">
+          <div class="text-4xl mb-3">🛡️</div>
+          <h4 class="font-bold text-gray-800 mb-2">Security</h4>
+          <p class="text-sm text-gray-600">Helmet, CORS, rate limiting built-in</p>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="text-center mt-12 text-gray-600">
+        <p>Built with Express, TypeScript, and Supabase</p>
+        <p class="text-sm mt-2">Ready for production deployment</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Check system health on page load
+    async function checkHealth() {
+      const statusBadge = document.getElementById('statusBadge');
+      const statusDetails = document.getElementById('statusDetails');
+
+      try {
+        const response = await fetch('/api/health');
+        const data = await response.json();
+
+        if (data.ok && data.status.healthy) {
+          statusBadge.textContent = '✓ All Systems Operational';
+          statusBadge.className = 'px-4 py-2 rounded-full text-sm font-semibold bg-green-100 text-green-800';
+
+          const services = data.status.services;
+          statusDetails.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="flex items-center space-x-3">
+                <span class="text-2xl">${services.supabaseAPI.ok ? '✓' : '✗'}</span>
+                <div>
+                  <p class="font-semibold text-gray-800">Supabase API</p>
+                  <p class="text-sm text-gray-600">${services.supabaseAPI.ok ? 'Connected' : 'Disconnected'}</p>
+                </div>
+              </div>
+              <div class="flex items-center space-x-3">
+                <span class="text-2xl">${services.supabaseAuth.ok ? '✓' : '✗'}</span>
+                <div>
+                  <p class="font-semibold text-gray-800">Auth Service</p>
+                  <p class="text-sm text-gray-600">${services.supabaseAuth.ok ? 'Active' : 'Inactive'}</p>
+                </div>
+              </div>
+              <div class="flex items-center space-x-3">
+                <span class="text-2xl">${services.supabaseStorage.ok ? '✓' : '✗'}</span>
+                <div>
+                  <p class="font-semibold text-gray-800">Storage</p>
+                  <p class="text-sm text-gray-600">${services.supabaseStorage.ok ? 'Ready' : 'Unavailable'}</p>
+                </div>
+              </div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-gray-200">
+              <p class="text-sm text-gray-600">
+                Last checked: ${new Date(data.status.timestamp).toLocaleString()}
+              </p>
+            </div>
+          `;
+        } else {
+          statusBadge.textContent = '⚠ Service Issues Detected';
+          statusBadge.className = 'px-4 py-2 rounded-full text-sm font-semibold bg-yellow-100 text-yellow-800';
+          statusDetails.innerHTML = '<p class="text-gray-600">Some services are experiencing issues.</p>';
+        }
+      } catch (error) {
+        statusBadge.textContent = '✗ Connection Error';
+        statusBadge.className = 'px-4 py-2 rounded-full text-sm font-semibold bg-red-100 text-red-800';
+        statusDetails.innerHTML = '<p class="text-red-600">Unable to connect to the server.</p>';
+      }
+    }
+
+    // Check health on page load
+    checkHealth();
+
+    // Refresh every 30 seconds
+    setInterval(checkHealth, 30000);
+  </script>
+</body>
+</html>

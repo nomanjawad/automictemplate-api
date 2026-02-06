@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Skytech Backend</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+  <nav class="bg-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex items-center">
+          <h1 class="text-xl font-bold text-gray-800">Skytech Backend</h1>
+        </div>
+        <div class="flex items-center space-x-4">
+          <span id="userEmail" class="text-gray-600"></span>
+          <button
+            id="logoutButton"
+            class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition duration-200"
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="bg-white rounded-2xl shadow-xl p-8">
+      <h2 class="text-2xl font-bold text-gray-800 mb-6">Welcome to Your Dashboard</h2>
+
+      <div id="message" class="hidden mb-6 p-4 rounded-lg text-sm"></div>
+
+      <div id="userInfo" class="space-y-4">
+        <div class="border-b pb-4">
+          <h3 class="text-lg font-semibold text-gray-700 mb-4">User Information</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p class="text-sm text-gray-500">User ID</p>
+              <p id="userId" class="text-gray-800 font-mono text-sm"></p>
+            </div>
+            <div>
+              <p class="text-sm text-gray-500">Email</p>
+              <p id="userEmailDisplay" class="text-gray-800"></p>
+            </div>
+            <div>
+              <p class="text-sm text-gray-500">Full Name</p>
+              <p id="userName" class="text-gray-800"></p>
+            </div>
+            <div>
+              <p class="text-sm text-gray-500">Account Created</p>
+              <p id="userCreated" class="text-gray-800"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-b pb-4">
+          <h3 class="text-lg font-semibold text-gray-700 mb-4">Session Information</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p class="text-sm text-gray-500">Access Token (first 20 chars)</p>
+              <p id="accessToken" class="text-gray-800 font-mono text-xs break-all"></p>
+            </div>
+            <div>
+              <p class="text-sm text-gray-500">Session Expires</p>
+              <p id="sessionExpiry" class="text-gray-800"></p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-lg font-semibold text-gray-700 mb-4">Content Management</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <a href="/test-home-editor.html" class="block p-4 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition">
+              <p class="font-semibold text-purple-800">🏠 Home Page</p>
+              <p class="text-sm text-purple-600">Edit home page content</p>
+            </a>
+            <div class="block p-4 bg-gray-50 border border-gray-200 rounded-lg opacity-50 cursor-not-allowed">
+              <p class="font-semibold text-gray-500">📞 Contact Page</p>
+              <p class="text-sm text-gray-400">Coming soon</p>
+            </div>
+            <div class="block p-4 bg-gray-50 border border-gray-200 rounded-lg opacity-50 cursor-not-allowed">
+              <p class="font-semibold text-gray-500">🖼️ Gallery Page</p>
+              <p class="text-sm text-gray-400">Coming soon</p>
+            </div>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-700 mb-4 mt-6">System</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <a href="/api/health" target="_blank" class="block p-4 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition">
+              <p class="font-semibold text-green-800">Health Check</p>
+              <p class="text-sm text-green-600">View system status</p>
+            </a>
+            <a href="/api/admin/status" target="_blank" class="block p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition">
+              <p class="font-semibold text-blue-800">System Config</p>
+              <p class="text-sm text-blue-600">View configuration</p>
+            </a>
+            <div class="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+              <p class="font-semibold text-purple-800">API Ready</p>
+              <p class="text-sm text-purple-600">Start building!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    const messageDiv = document.getElementById('message');
+    const logoutButton = document.getElementById('logoutButton');
+
+    // Display user information
+    function displayUserInfo() {
+      const user = auth.getUser();
+      const token = auth.getToken();
+      const expiry = sessionStorage.getItem('jwt_expiry');
+
+      if (user && token) {
+        document.getElementById('userId').textContent = user.id || 'N/A';
+        document.getElementById('userEmail').textContent = user.email || 'N/A';
+        document.getElementById('userEmailDisplay').textContent = user.email || 'N/A';
+        document.getElementById('userName').textContent = user.user_metadata?.full_name || 'Not provided';
+        document.getElementById('userCreated').textContent = user.created_at
+          ? new Date(user.created_at).toLocaleString()
+          : 'N/A';
+        document.getElementById('accessToken').textContent = token.substring(0, 20) + '...';
+        document.getElementById('sessionExpiry').textContent = expiry
+          ? new Date(expiry).toLocaleString()
+          : 'N/A';
+      } else {
+        showError('Failed to load user information');
+      }
+    }
+
+    function showError(message) {
+      messageDiv.classList.remove('hidden');
+      messageDiv.classList.add('bg-red-100', 'text-red-800');
+      messageDiv.textContent = message;
+    }
+
+    function showSuccess(message) {
+      messageDiv.classList.remove('hidden');
+      messageDiv.classList.add('bg-green-100', 'text-green-800');
+      messageDiv.textContent = message;
+    }
+
+    // Logout handler
+    logoutButton.addEventListener('click', async () => {
+      await auth.logout();
+      showSuccess('✅ Logged out successfully. Redirecting...');
+      setTimeout(() => {
+        window.location.href = '/login.html';
+      }, 1000);
+    });
+
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('Dashboard: DOM loaded');
+
+      // Check authentication
+      if (!auth.isAuthenticated()) {
+        console.log('Dashboard: Not authenticated, redirecting to login');
+        sessionStorage.setItem('auth_redirect', window.location.pathname);
+        window.location.href = '/login.html';
+        return;
+      }
+
+      console.log('Dashboard: User authenticated');
+      // Display user info on page load
+      displayUserInfo();
+    });
+  </script>
+</body>
+</html>
