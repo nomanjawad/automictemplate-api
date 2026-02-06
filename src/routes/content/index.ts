@@ -102,7 +102,7 @@ router.delete(
   '/pages/:slug',
   requireAuth,
   validate(GetPageContentValidator),
-  contentController.deletePage
+  contentController.deleteContentPage
 )
 
 export default router

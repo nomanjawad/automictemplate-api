@@ -184,7 +184,7 @@ export async function upsertPage(req: Request, res: Response, next: NextFunction
  * Delete page by slug
  * DELETE /api/content/pages/:slug
  */
-export async function deletePage(req: Request, res: Response, next: NextFunction) {
+export async function deleteContentPage(req: Request, res: Response, next: NextFunction) {
   try {
     const { slug } = req.params
 
