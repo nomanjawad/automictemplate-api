@@ -50,6 +50,24 @@ app.use(cors({
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
 
+// Custom JSON parsing error handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  // Handle JSON parsing errors
+  if (err instanceof SyntaxError && 'body' in err) {
+    logger.error('JSON parsing error', { 
+      message: err.message,
+      body: (err as any).body?.slice(0, 200)
+    })
+    return res.status(400).json({
+      error: 'Invalid JSON in request body',
+      code: 'INVALID_JSON',
+      details: err.message,
+      hint: 'Make sure all JSON keys are double-quoted and values are properly formatted'
+    })
+  }
+  next(err)
+})
+
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, '../public')))
 

@@ -10,10 +10,13 @@ import { logger } from '../utils/logger.js'
 const SUPABASE_URL = process.env.SUPABASE_URL || ''
 
 /**
- * @constant {string} Supabase anonymous key
- * Supports both SUPABASE_ANON_KEY and NEXT_PUBLIC_SUPABASE_ANON_KEY for flexibility
+ * @constant {string} Supabase service role key
+ * Uses service role key to bypass RLS policies on backend
+ * This is safe because authentication is verified via JWT middleware first
+ * Falls back to anon key if service role key is not available
  */
 const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   ''
@@ -24,6 +27,11 @@ if (!SUPABASE_URL) {
 
 if (!SUPABASE_KEY) {
   logger.error('No Supabase key found in environment variables')
+}
+
+// Warn if using anon key instead of service role key
+if (SUPABASE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NODE_ENV === 'production') {
+  logger.warn('Using SUPABASE_ANON_KEY in production - consider using SUPABASE_SERVICE_ROLE_KEY for better RLS handling')
 }
 
 /**

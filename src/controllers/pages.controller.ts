@@ -124,31 +124,30 @@ export async function getPageById(req: Request, res: Response) {
 /**
  * Create a new page
  * Auto-sets author_id from authenticated user
- * Body: { title, slug, data, meta_data?, status? }
+ * Body: { title, slug, meta_data? }
+ * Note: data (content) can be left empty and updated later via updatePage
  */
 export async function createPage(req: Request, res: Response) {
   const userId = req.user?.id
 
   if (!userId) {
-    return res.status(401).json({ error: 'User not authenticated' })
+    return res.status(401).json({ 
+      error: 'User not authenticated',
+      code: 'NOT_AUTHENTICATED'
+    })
   }
 
-  const { title, slug, data, meta_data, status } = req.body
+  const { title, slug, data, meta_data } = req.body
 
   // Validate required fields
-  if (!title || !slug || !data) {
+  if (!title || !slug) {
     return res.status(400).json({
-      error: 'Missing required fields: title, slug, and data are required'
+      error: 'Missing required fields: title and slug are required'
     })
   }
 
-  // Validate status if provided
-  const validStatuses = ['draft', 'review', 'scheduled', 'published', 'archived']
-  if (status && !validStatuses.includes(status)) {
-    return res.status(400).json({
-      error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
-    })
-  }
+  // data is optional now (can be added later via update)
+  const pageData = data || {}
 
   if (!supabase) {
     logger.error('Supabase client not configured')
@@ -157,14 +156,15 @@ export async function createPage(req: Request, res: Response) {
 
   try {
     // Create new page with author_id from authenticated user
+    // Always start as draft status
     const { data: page, error } = await supabase
       .from('content_pages')
       .insert({
         title,
         slug,
-        data,
+        data: pageData,
         meta_data: meta_data || null,
-        status: status || 'draft',
+        status: 'draft',
         author_id: userId,
         last_modified_by: userId
       })
@@ -176,12 +176,52 @@ export async function createPage(req: Request, res: Response) {
       if (error.code === '23505') {
         logger.warn('Page creation failed - duplicate slug', { slug, userId })
         return res.status(409).json({
-          error: 'A page with this slug already exists. Please use a different slug.'
+          error: 'A page with this slug already exists. Please use a different slug.',
+          code: 'DUPLICATE_SLUG'
         })
       }
 
-      logger.error('Failed to create page', { error: error.message, userId })
-      return res.status(500).json({ error: 'Failed to create page' })
+      // Handle invalid input errors
+      if (error.code === '22P02' || error.code === '23514') {
+        logger.error('Page creation failed - invalid input', { 
+          error: error.message,
+          details: error.details,
+          slug, 
+          userId 
+        })
+        return res.status(400).json({ 
+          error: 'Invalid input data: ' + error.message,
+          code: 'INVALID_INPUT',
+          details: error.details
+        })
+      }
+
+      // Handle foreign key constraint
+      if (error.code === '23503') {
+        logger.error('Page creation failed - invalid user reference', { 
+          error: error.message,
+          userId 
+        })
+        return res.status(400).json({ 
+          error: 'Invalid user ID: user does not exist',
+          code: 'INVALID_USER'
+        })
+      }
+
+      // Generic database error - log full details
+      logger.error('Page creation failed - database error', { 
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        slug,
+        userId 
+      })
+      return res.status(500).json({ 
+        error: 'Database error: ' + error.message,
+        code: error.code,
+        details: error.details
+      })
     }
 
     logger.info('Page created successfully', { pageId: page.id, slug, userId })
@@ -191,8 +231,15 @@ export async function createPage(req: Request, res: Response) {
       page
     })
   } catch (err: any) {
-    logger.error('Create page failed', { error: err.message || err, userId })
-    return res.status(500).json({ error: 'Failed to create page' })
+    logger.error('Create page failed - unexpected error', { 
+      error: err.message || err, 
+      stack: err.stack,
+      userId 
+    })
+    return res.status(500).json({ 
+      error: 'Unexpected error: ' + (err.message || 'Unknown error'),
+      code: 'INTERNAL_ERROR'
+    })
   }
 }
 
@@ -200,25 +247,34 @@ export async function createPage(req: Request, res: Response) {
  * Update a page by ID
  * Updates: title, slug, data, meta_data, status
  * Auto-sets last_modified_by from authenticated user
+ * Auto-logs changes to content_history table via trigger
+ * Valid statuses: draft, review, scheduled, published, archived
  */
 export async function updatePage(req: Request, res: Response) {
   const userId = req.user?.id
 
   if (!userId) {
-    return res.status(401).json({ error: 'User not authenticated' })
+    return res.status(401).json({ 
+      error: 'User not authenticated',
+      code: 'NOT_AUTHENTICATED'
+    })
   }
 
   const { id } = req.params
   const { title, slug, data, meta_data, status } = req.body
 
   if (!id) {
-    return res.status(400).json({ error: 'Page ID is required' })
+    return res.status(400).json({ 
+      error: 'Page ID is required',
+      code: 'MISSING_ID'
+    })
   }
 
   // Validate at least one field is being updated
   if (!title && !slug && !data && !meta_data && !status) {
     return res.status(400).json({
-      error: 'At least one field must be provided for update'
+      error: 'At least one field must be provided for update',
+      code: 'NO_UPDATES'
     })
   }
 
@@ -226,19 +282,25 @@ export async function updatePage(req: Request, res: Response) {
   const validStatuses = ['draft', 'review', 'scheduled', 'published', 'archived']
   if (status && !validStatuses.includes(status)) {
     return res.status(400).json({
-      error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+      error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+      code: 'INVALID_STATUS',
+      validValues: validStatuses
     })
   }
 
   if (!supabase) {
     logger.error('Supabase client not configured')
-    return res.status(500).json({ error: 'Database service unavailable' })
+    return res.status(500).json({ 
+      error: 'Database service unavailable',
+      code: 'DB_UNAVAILABLE'
+    })
   }
 
   try {
     // Build update object with only provided fields
     const updateData: any = {
-      last_modified_by: userId
+      last_modified_by: userId,
+      updated_at: new Date().toISOString()
     }
     if (title !== undefined) updateData.title = title
     if (slug !== undefined) updateData.slug = slug
@@ -259,27 +321,78 @@ export async function updatePage(req: Request, res: Response) {
       if (error.code === '23505') {
         logger.warn('Page update failed - duplicate slug', { slug, id, userId })
         return res.status(409).json({
-          error: 'A page with this slug already exists. Please use a different slug.'
+          error: 'A page with this slug already exists. Please use a different slug.',
+          code: 'DUPLICATE_SLUG'
         })
       }
 
+      // Handle page not found
       if (error.code === 'PGRST116') {
-        return res.status(404).json({ error: 'Page not found' })
+        logger.warn('Page update failed - not found', { id, userId })
+        return res.status(404).json({ 
+          error: 'Page not found',
+          code: 'PAGE_NOT_FOUND'
+        })
       }
 
-      logger.error('Failed to update page', { error: error.message, id, userId })
-      return res.status(500).json({ error: 'Failed to update page' })
+      // Handle invalid input errors
+      if (error.code === '22P02' || error.code === '23514') {
+        logger.error('Page update failed - invalid input', { 
+          error: error.message,
+          details: error.details,
+          id, 
+          userId 
+        })
+        return res.status(400).json({ 
+          error: 'Invalid input data: ' + error.message,
+          code: 'INVALID_INPUT',
+          details: error.details
+        })
+      }
+
+      // Generic database error
+      logger.error('Page update failed - database error', { 
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        id,
+        userId 
+      })
+      return res.status(500).json({ 
+        error: 'Database error: ' + error.message,
+        code: error.code,
+        details: error.details
+      })
     }
 
     logger.info('Page updated successfully', { pageId: id, userId })
 
     return res.json({
       message: 'Page updated successfully',
-      page
+      page: {
+        id: page.id,
+        title: page.title,
+        slug: page.slug,
+        status: page.status,
+        data: page.data,
+        meta_data: page.meta_data,
+        version: page.version,
+        updated_at: page.updated_at,
+        last_modified_by: page.last_modified_by
+      }
     })
   } catch (err: any) {
-    logger.error('Update page failed', { error: err.message || err, id, userId })
-    return res.status(500).json({ error: 'Failed to update page' })
+    logger.error('Update page failed - unexpected error', { 
+      error: err.message || err, 
+      stack: err.stack,
+      id, 
+      userId 
+    })
+    return res.status(500).json({ 
+      error: 'Unexpected error: ' + (err.message || 'Unknown error'),
+      code: 'INTERNAL_ERROR'
+    })
   }
 }
 
@@ -290,18 +403,27 @@ export async function deletePage(req: Request, res: Response) {
   const userId = req.user?.id
 
   if (!userId) {
-    return res.status(401).json({ error: 'User not authenticated' })
+    return res.status(401).json({ 
+      error: 'User not authenticated',
+      code: 'NOT_AUTHENTICATED'
+    })
   }
 
   const { id } = req.params
 
   if (!id) {
-    return res.status(400).json({ error: 'Page ID is required' })
+    return res.status(400).json({ 
+      error: 'Page ID is required',
+      code: 'MISSING_ID'
+    })
   }
 
   if (!supabase) {
     logger.error('Supabase client not configured')
-    return res.status(500).json({ error: 'Database service unavailable' })
+    return res.status(500).json({ 
+      error: 'Database service unavailable',
+      code: 'DB_UNAVAILABLE'
+    })
   }
 
   try {
@@ -313,7 +435,11 @@ export async function deletePage(req: Request, res: Response) {
       .single()
 
     if (fetchError || !page) {
-      return res.status(404).json({ error: 'Page not found' })
+      logger.warn('Page delete failed - not found', { id, userId })
+      return res.status(404).json({ 
+        error: 'Page not found',
+        code: 'PAGE_NOT_FOUND'
+      })
     }
 
     // Delete page
@@ -323,8 +449,18 @@ export async function deletePage(req: Request, res: Response) {
       .eq('id', id)
 
     if (deleteError) {
-      logger.error('Failed to delete page', { error: deleteError.message, id, userId })
-      return res.status(500).json({ error: 'Failed to delete page' })
+      logger.error('Delete page failed - database error', { 
+        error: deleteError.message, 
+        code: deleteError.code,
+        details: deleteError.details,
+        id, 
+        userId 
+      })
+      return res.status(500).json({ 
+        error: 'Database error: ' + deleteError.message,
+        code: deleteError.code,
+        details: deleteError.details
+      })
     }
 
     logger.warn('Page deleted', { pageId: id, slug: page.slug, deletedBy: userId })
@@ -338,7 +474,266 @@ export async function deletePage(req: Request, res: Response) {
       }
     })
   } catch (err: any) {
-    logger.error('Delete page failed', { error: err.message || err, id, userId })
-    return res.status(500).json({ error: 'Failed to delete page' })
+    logger.error('Delete page failed - unexpected error', { 
+      error: err.message || err, 
+      stack: err.stack,
+      id, 
+      userId 
+    })
+    return res.status(500).json({ 
+      error: 'Unexpected error: ' + (err.message || 'Unknown error'),
+      code: 'INTERNAL_ERROR'
+    })
+  }
+}
+
+/**
+ * Get page version history
+ * Returns all versions of a page from content_history table
+ * Sorted by version descending (newest first)
+ */
+export async function getPageHistory(req: Request, res: Response) {
+  const { id } = req.params
+
+  if (!id) {
+    return res.status(400).json({ 
+      error: 'Page ID is required',
+      code: 'MISSING_ID'
+    })
+  }
+
+  if (!supabase) {
+    logger.error('Supabase client not configured')
+    return res.status(500).json({ 
+      error: 'Database service unavailable',
+      code: 'DB_UNAVAILABLE'
+    })
+  }
+
+  try {
+    // Get page first to verify it exists
+    const { data: page, error: pageError } = await supabase
+      .from('content_pages')
+      .select('id, title, slug')
+      .eq('id', id)
+      .single()
+
+    if (pageError || !page) {
+      logger.warn('Page not found for history', { id })
+      return res.status(404).json({ 
+        error: 'Page not found',
+        code: 'PAGE_NOT_FOUND'
+      })
+    }
+
+    // Get history from content_history table
+    const { data: history, error } = await supabase
+      .from('content_history')
+      .select(`
+        version,
+        title,
+        status,
+        created_at,
+        changed_by,
+        change_summary,
+        users!content_history_changed_by_fkey (
+          id,
+          full_name,
+          email
+        )
+      `)
+      .eq('table_name', 'content_pages')
+      .eq('record_id', id)
+      .order('version', { ascending: false })
+
+    if (error) {
+      logger.error('Fetch page history failed - database error', { 
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        id 
+      })
+      return res.status(500).json({ 
+        error: 'Database error: ' + error.message,
+        code: error.code,
+        details: error.details
+      })
+    }
+
+    const historyWithUser = (history || []).map((h: any) => ({
+      version: h.version,
+      title: h.title,
+      status: h.status,
+      created_at: h.created_at,
+      change_summary: h.change_summary,
+      changed_by_name: h.users?.full_name || 'Unknown',
+      changed_by_email: h.users?.email || null
+    }))
+
+    logger.info('Fetched page history', { id, versions: historyWithUser.length })
+
+    return res.json({
+      page: {
+        id: page.id,
+        title: page.title,
+        slug: page.slug
+      },
+      history: historyWithUser
+    })
+  } catch (err: any) {
+    logger.error('Get page history failed - unexpected error', { 
+      error: err.message || err, 
+      stack: err.stack,
+      id 
+    })
+    return res.status(500).json({ 
+      error: 'Unexpected error: ' + (err.message || 'Unknown error'),
+      code: 'INTERNAL_ERROR'
+    })
+  }
+}
+
+/**
+ * Restore a previous page version
+ * Restores content, title, metadata, and status from a specific version
+ * The restoration itself creates a new version entry in content_history
+ */
+export async function restorePageVersion(req: Request, res: Response) {
+  const userId = req.user?.id
+
+  if (!userId) {
+    return res.status(401).json({ 
+      error: 'User not authenticated',
+      code: 'NOT_AUTHENTICATED'
+    })
+  }
+
+  const { id, version } = req.params
+
+  if (!id || !version) {
+    return res.status(400).json({ 
+      error: 'Page ID and version are required',
+      code: 'MISSING_PARAMS'
+    })
+  }
+
+  // Validate version is a number
+  if (isNaN(parseInt(version))) {
+    return res.status(400).json({ 
+      error: 'Version must be a valid number',
+      code: 'INVALID_VERSION'
+    })
+  }
+
+  if (!supabase) {
+    logger.error('Supabase client not configured')
+    return res.status(500).json({ 
+      error: 'Database service unavailable',
+      code: 'DB_UNAVAILABLE'
+    })
+  }
+
+  try {
+    // Get the page first
+    const { data: page, error: pageError } = await supabase
+      .from('content_pages')
+      .select('id, title, slug')
+      .eq('id', id)
+      .single()
+
+    if (pageError || !page) {
+      logger.warn('Page not found for restore', { id })
+      return res.status(404).json({ 
+        error: 'Page not found',
+        code: 'PAGE_NOT_FOUND'
+      })
+    }
+
+    // Get the specific history version
+    const { data: historyRecord, error: historyError } = await supabase
+      .from('content_history')
+      .select('*')
+      .eq('table_name', 'content_pages')
+      .eq('record_id', id)
+      .eq('version', parseInt(version))
+      .single()
+
+    if (historyError || !historyRecord) {
+      logger.warn('Version not found for restore', { id, version })
+      return res.status(404).json({ 
+        error: `Version ${version} not found for this page`,
+        code: 'VERSION_NOT_FOUND'
+      })
+    }
+
+    // Restore the page using the database function
+    const { data: restored, error: restoreError } = await supabase
+      .rpc('restore_content_version', {
+        p_table_name: 'content_pages',
+        p_record_id: id,
+        p_version: parseInt(version),
+        p_restored_by: userId
+      })
+
+    if (restoreError) {
+      logger.error('Restore page version failed - database error', { 
+        error: restoreError.message,
+        code: restoreError.code,
+        details: restoreError.details,
+        id, 
+        version 
+      })
+      return res.status(500).json({ 
+        error: 'Database error: ' + restoreError.message,
+        code: restoreError.code,
+        details: restoreError.details
+      })
+    }
+
+    // Get the updated page
+    const { data: updatedPage, error: fetchError } = await supabase
+      .from('content_pages')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !updatedPage) {
+      logger.error('Fetch restored page failed - database error', { 
+        error: fetchError?.message,
+        code: fetchError?.code,
+        id 
+      })
+      return res.status(500).json({ 
+        error: 'Failed to fetch restored page',
+        code: 'FETCH_ERROR'
+      })
+    }
+
+    logger.info('Page version restored successfully', { pageId: id, version, restoredBy: userId })
+
+    return res.json({
+      message: `Page successfully restored to version ${version}`,
+      page: {
+        id: updatedPage.id,
+        title: updatedPage.title,
+        slug: updatedPage.slug,
+        status: updatedPage.status,
+        data: updatedPage.data,
+        meta_data: updatedPage.meta_data,
+        version: updatedPage.version,
+        updated_at: updatedPage.updated_at
+      }
+    })
+  } catch (err: any) {
+    logger.error('Restore page version failed - unexpected error', { 
+      error: err.message || err, 
+      stack: err.stack,
+      id, 
+      version 
+    })
+    return res.status(500).json({ 
+      error: 'Unexpected error: ' + (err.message || 'Unknown error'),
+      code: 'INTERNAL_ERROR'
+    })
   }
 }

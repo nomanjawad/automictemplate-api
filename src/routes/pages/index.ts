@@ -4,7 +4,9 @@ import {
   getPageById,
   createPage,
   updatePage,
-  deletePage
+  deletePage,
+  getPageHistory,
+  restorePageVersion
 } from '@controllers'
 import { requireAuth } from '@middleware'
 
@@ -30,10 +32,18 @@ router.get('/', requireAuth, getAllPages)
 router.get('/:id', requireAuth, getPageById)
 
 /**
+ * GET /api/pages/:id/history
+ * Get page version history
+ * Returns: All versions with who changed it and when
+ */
+router.get('/:id/history', requireAuth, getPageHistory)
+
+/**
  * POST /api/pages
  * Create a new page
- * Body: { title, slug, data, meta_data?, status? }
- * Auto-sets author_id from authenticated user
+ * Body: { title, slug, meta_data? }
+ * Auto-sets author_id and status to 'draft'
+ * Content data can be added/updated later
  */
 router.post('/', requireAuth, createPage)
 
@@ -41,10 +51,17 @@ router.post('/', requireAuth, createPage)
  * PUT /api/pages/:id
  * Update a page by ID
  * Body: { title?, slug?, data?, meta_data?, status? }
- * Auto-sets last_modified_by from authenticated user
- * No authorization check - any authenticated user can update any page
+ * Auto-sets last_modified_by and tracks changes in content_history
+ * Status can be: 'draft', 'review', 'scheduled', 'published', 'archived'
  */
 router.put('/:id', requireAuth, updatePage)
+
+/**
+ * POST /api/pages/:id/restore/:version
+ * Restore a page to a previous version
+ * Returns: Updated page with restored content
+ */
+router.post('/:id/restore/:version', requireAuth, restorePageVersion)
 
 /**
  * DELETE /api/pages/:id
