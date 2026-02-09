@@ -1,323 +1,226 @@
 import { Request, Response } from 'express'
 import { supabase } from '../db/supabaseClient.js'
-import { logger } from '../utils/index.js'
+import { logger, asyncHandler, BadRequestError, ApiNotFoundError, InternalServerError, ApiDatabaseError } from '../utils/index.js'
 
 /**
- * Get all users from the database
- * No pagination, no filtering - returns ALL users
- * Dashboard will handle sorting/filtering
+ * Get all users with full details
+ * Returns ALL user data (internal use only for admins)
+ * Frontend will handle filtering based on role
  */
-export async function getAllUsers(req: Request, res: Response) {
+export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
   if (!supabase) {
     logger.error('Supabase client not configured')
-    return res.status(500).json({ error: 'Database service unavailable' })
+    throw new InternalServerError('Database service unavailable')
   }
 
-  try {
-    // Get all users from public.users table
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false })
+  // Get all users from public.users table
+  const { data: users, error } = await supabase
+    .from('users')
+    .select('*')
+    .order('created_at', { ascending: false })
 
-    if (error) {
-      logger.error('Failed to fetch users', { error: error.message })
-      return res.status(500).json({ error: 'Failed to fetch users' })
-    }
-
-    logger.info('Fetched all users', { count: users?.length || 0 })
-
-    return res.json({
-      users: users || [],
-      total: users?.length || 0
-    })
-  } catch (err: any) {
-    logger.error('Get all users failed', { error: err.message || err })
-    return res.status(500).json({ error: 'Failed to fetch users' })
+  if (error) {
+    logger.error('Failed to fetch users', { error: error.message })
+    throw new ApiDatabaseError(error)
   }
-}
+
+  logger.info('Fetched all users', { count: users?.length || 0 })
+
+  return res.json({
+    users: users || [],
+    total: users?.length || 0
+  })
+})
 
 /**
- * Get user by email
- * Used for profile pages in the dashboard
+ * Get all users public (limited fields)
+ * Returns only: full_name, email, role, created_at
+ * For public listing without exposing sensitive data
  */
-export async function getUserByEmail(req: Request, res: Response) {
-  const { email } = req.params
+export const getAllUsersPublic = asyncHandler(async (req: Request, res: Response) => {
+  if (!supabase) {
+    logger.error('Supabase client not configured')
+    throw new InternalServerError('Database service unavailable')
+  }
 
-  if (!email) {
-    return res.status(400).json({ error: 'Email parameter is required' })
+  // Get all users with limited fields
+  const { data: users, error } = await supabase
+    .from('users')
+    .select('id, full_name, email, role, created_at')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    logger.error('Failed to fetch users', { error: error.message })
+    throw new ApiDatabaseError(error)
+  }
+
+  logger.info('Fetched all users (public)', { count: users?.length || 0 })
+
+  return res.json({
+    users: users || [],
+    total: users?.length || 0
+  })
+})
+
+/**
+ * Get user by ID
+ * Returns all user info: email, full_name, role, bio, avatar_url, metadata, created_at, updated_at
+ * Frontend will control visibility based on user role
+ */
+export const getUserById = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params
+
+  if (!id) {
+    throw new BadRequestError('User ID is required')
   }
 
   if (!supabase) {
     logger.error('Supabase client not configured')
-    return res.status(500).json({ error: 'Database service unavailable' })
+    throw new InternalServerError('Database service unavailable')
   }
 
-  try {
-    // Get user from public.users table
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .limit(1)
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', id)
+    .single()
 
-    if (error) {
-      logger.error('Failed to fetch user by email', { error: error.message, email })
-      return res.status(500).json({ error: 'Failed to fetch user' })
+  if (error) {
+    if (error.code === 'PGRST116') {
+      throw new ApiNotFoundError('User not found')
     }
-
-    if (!users || users.length === 0) {
-      return res.status(404).json({ error: 'User not found' })
-    }
-
-    logger.info('Fetched user by email', { email })
-
-    return res.json({
-      user: users[0]
-    })
-  } catch (err: any) {
-    logger.error('Get user by email failed', { error: err.message || err, email })
-    return res.status(500).json({ error: 'Failed to fetch user' })
+    logger.error('Failed to fetch user by ID', { error: error.message, userId: id })
+    throw new ApiDatabaseError(error)
   }
-}
+
+  logger.info('Fetched user by ID', { userId: id })
+
+  return res.json({ user })
+})
 
 /**
- * Update own profile (authenticated user)
- * Updates: full_name, bio, avatar_url, metadata
+ * Update own profile (authenticated user only)
+ * Users can only update their own profile
+ * Can update: full_name, bio, avatar_url, metadata
+ * Cannot update: email, password, role (frontend controls visibility)
  */
-export async function updateProfile(req: Request, res: Response) {
+export const updateProfile = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?.id
 
   if (!userId) {
-    return res.status(401).json({ error: 'User not authenticated' })
+    throw new Error('User not authenticated')
   }
 
   const { full_name, bio, avatar_url, metadata } = req.body
 
   // Validate at least one field is being updated
-  if (!full_name && !bio && !avatar_url && !metadata) {
-    return res.status(400).json({ error: 'At least one field must be provided for update' })
+  if (full_name === undefined && bio === undefined && avatar_url === undefined && metadata === undefined) {
+    throw new BadRequestError('At least one field must be provided for update')
   }
 
   if (!supabase) {
     logger.error('Supabase client not configured')
-    return res.status(500).json({ error: 'Database service unavailable' })
+    throw new InternalServerError('Database service unavailable')
   }
 
-  try {
-    // Build update object with only provided fields
-    const updateData: any = {}
-    if (full_name !== undefined) updateData.full_name = full_name
-    if (bio !== undefined) updateData.bio = bio
-    if (avatar_url !== undefined) updateData.avatar_url = avatar_url
-    if (metadata !== undefined) updateData.metadata = metadata
+  // Build update object with only provided fields
+  const updateData: any = {}
+  if (full_name !== undefined) updateData.full_name = full_name
+  if (bio !== undefined) updateData.bio = bio
+  if (avatar_url !== undefined) updateData.avatar_url = avatar_url
+  if (metadata !== undefined) updateData.metadata = metadata
 
-    // Update user in public.users table
-    const { data: user, error } = await supabase
-      .from('users')
-      .update(updateData)
-      .eq('id', userId)
-      .select()
-      .single()
+  // Update user in public.users table
+  const { data: user, error } = await supabase
+    .from('users')
+    .update(updateData)
+    .eq('id', userId)
+    .select()
+    .single()
 
-    if (error) {
-      logger.error('Failed to update profile', { error: error.message, userId })
-      return res.status(500).json({ error: 'Failed to update profile' })
-    }
-
-    logger.info('Profile updated successfully', { userId })
-
-    return res.json({
-      message: 'Profile updated successfully',
-      user
-    })
-  } catch (err: any) {
-    logger.error('Update profile failed', { error: err.message || err, userId })
-    return res.status(500).json({ error: 'Failed to update profile' })
+  if (error) {
+    logger.error('Failed to update profile', { error: error.message, userId })
+    throw new ApiDatabaseError(error)
   }
-}
+
+  logger.info('Profile updated successfully', { userId })
+
+  return res.json({
+    message: 'Profile updated successfully',
+    user
+  })
+})
 
 /**
- * Update any user by ID
- * Dashboard uses this to update any user
- * Can update: full_name, bio, avatar_url, role, metadata
+ * Delete own account (authenticated user only)
+ * Default soft delete (sets deleted_at)
+ * Permanently deletes from auth.users which cascades to public.users
  */
-export async function updateUser(req: Request, res: Response) {
-  const { id } = req.params
-  const { full_name, bio, avatar_url, role, metadata } = req.body
+export const deleteProfile = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user?.id
 
-  if (!id) {
-    return res.status(400).json({ error: 'User ID is required' })
-  }
-
-  // Validate at least one field is being updated
-  if (!full_name && !bio && !avatar_url && !role && !metadata) {
-    return res.status(400).json({ error: 'At least one field must be provided for update' })
-  }
-
-  // Validate role if provided
-  if (role && !['user', 'admin', 'moderator'].includes(role)) {
-    return res.status(400).json({ error: 'Invalid role. Must be: user, admin, or moderator' })
+  if (!userId) {
+    throw new Error('User not authenticated')
   }
 
   if (!supabase) {
     logger.error('Supabase client not configured')
-    return res.status(500).json({ error: 'Database service unavailable' })
+    throw new InternalServerError('Database service unavailable')
   }
 
-  try {
-    // Build update object with only provided fields
-    const updateData: any = {}
-    if (full_name !== undefined) updateData.full_name = full_name
-    if (bio !== undefined) updateData.bio = bio
-    if (avatar_url !== undefined) updateData.avatar_url = avatar_url
-    if (role !== undefined) updateData.role = role
-    if (metadata !== undefined) updateData.metadata = metadata
+  // Delete from auth.users - cascades to public.users
+  const { error: authError } = await supabase.auth.admin.deleteUser(userId)
 
-    // Update user in public.users table
-    const { data: user, error } = await supabase
-      .from('users')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) {
-      logger.error('Failed to update user', { error: error.message, userId: id })
-      return res.status(500).json({ error: 'Failed to update user' })
-    }
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' })
-    }
-
-    logger.info('User updated successfully', { userId: id, updatedBy: req.user?.id })
-
-    return res.json({
-      message: 'User updated successfully',
-      user
-    })
-  } catch (err: any) {
-    logger.error('Update user failed', { error: err.message || err, userId: id })
-    return res.status(500).json({ error: 'Failed to update user' })
+  if (authError) {
+    logger.error('Failed to delete user account', { error: authError.message, userId })
+    throw new InternalServerError('Failed to delete account')
   }
-}
+
+  logger.info('User account deleted', { userId })
+
+  return res.json({
+    message: 'Account deleted successfully'
+  })
+})
 
 /**
- * Delete user by ID
- * This will delete from both auth.users and public.users (cascade)
+ * Check active session
+ * Returns current user's session info with role
  */
-export async function deleteUser(req: Request, res: Response) {
-  const { id } = req.params
+export const checkSession = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user?.id
 
-  if (!id) {
-    return res.status(400).json({ error: 'User ID is required' })
-  }
-
-  if (!supabase) {
-    logger.error('Supabase client not configured')
-    return res.status(500).json({ error: 'Database service unavailable' })
-  }
-
-  try {
-    // First get user info before deletion
-    const { data: user, error: fetchError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', id)
-      .single()
-
-    if (fetchError || !user) {
-      return res.status(404).json({ error: 'User not found' })
-    }
-
-    // Delete from auth.users (this will cascade to public.users)
-    const { error: deleteError } = await supabase.auth.admin.deleteUser(id)
-
-    if (deleteError) {
-      logger.error('Failed to delete user', { error: deleteError.message, userId: id })
-      return res.status(500).json({ error: 'Failed to delete user' })
-    }
-
-    logger.warn('User deleted', { userId: id, email: user.email, deletedBy: req.user?.id })
-
+  if (!userId) {
     return res.json({
-      message: 'User deleted successfully',
-      deleted_user: {
-        id: user.id,
-        email: user.email,
-        full_name: user.full_name
-      }
-    })
-  } catch (err: any) {
-    logger.error('Delete user failed', { error: err.message || err, userId: id })
-    return res.status(500).json({ error: 'Failed to delete user' })
-  }
-}
-
-/**
- * Check if session is active
- * Returns boolean and session details
- */
-export async function checkSession(req: Request, res: Response) {
-  const user = req.user
-
-  if (!user) {
-    return res.json({
-      active: false,
-      message: 'No active session'
+      session: null,
+      user: null
     })
   }
 
   if (!supabase) {
     logger.error('Supabase client not configured')
-    return res.status(500).json({ error: 'Authentication service unavailable' })
+    throw new InternalServerError('Database service unavailable')
   }
 
-  try {
-    // Get the token from the request header
-    const authHeader = req.headers.authorization
-    const token = authHeader?.split(' ')[1]
+  // Get current user session
+  const { data: sessionData } = await supabase.auth.getSession()
 
-    if (!token) {
-      return res.json({
-        active: false,
-        message: 'No token provided'
-      })
-    }
+  // Get user profile with role
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single()
 
-    // Verify token with Supabase
-    const { data: { session }, error } = await supabase.auth.getSession()
-
-    if (error || !session) {
-      logger.info('Session check failed', { userId: user.id })
-      return res.json({
-        active: false,
-        message: 'Session expired or invalid'
-      })
-    }
-
-    logger.info('Session check successful', { userId: user.id })
-
-    return res.json({
-      active: true,
-      session: {
-        user_id: user.id,
-        email: user.email,
-        expires_at: session.expires_at
-      },
-      user: {
-        id: user.id,
-        email: user.email,
-        full_name: user.user_metadata?.full_name,
-        role: user.user_metadata?.role || 'user'
-      }
-    })
-  } catch (err: any) {
-    logger.error('Session check failed', { error: err.message || err })
-    return res.json({
-      active: false,
-      message: 'Session check failed'
-    })
+  if (error) {
+    logger.error('Failed to fetch user profile', { error: error.message, userId })
+    throw new ApiDatabaseError(error)
   }
-}
+
+  logger.info('Session checked', { userId })
+
+  return res.json({
+    session: sessionData?.session || null,
+    user: user || null
+  })
+})

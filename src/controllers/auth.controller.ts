@@ -6,13 +6,24 @@ import { logger } from '../utils/index.js'
  * Register a new user using Supabase Auth
  * Uses signUp which allows public registration
  * Supabase enforces unique email constraint
+ * Body: { email, password, full_name, role? }
+ * role can be: 'user' (default), 'admin', 'moderator'
  */
 export async function register(req: Request, res: Response) {
-  const { email, password, full_name } = req.body
+  const { email, password, full_name, role = 'user' } = req.body
 
   // Validate required fields
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' })
+  }
+
+  // Validate role
+  const validRoles = ['user', 'admin', 'moderator']
+  if (role && !validRoles.includes(role)) {
+    return res.status(400).json({
+      error: `Invalid role. Must be one of: ${validRoles.join(', ')}`,
+      code: 'INVALID_ROLE'
+    })
   }
 
   // Validate email format
@@ -37,7 +48,8 @@ export async function register(req: Request, res: Response) {
       password,
       options: {
         data: {
-          full_name: full_name || null
+          full_name: full_name || null,
+          role: role || 'user'
         }
       }
     })
@@ -62,10 +74,6 @@ export async function register(req: Request, res: Response) {
       })
     }
 
-    // IMPORTANT: Supabase returns success for duplicate emails to prevent email enumeration
-    // When email is duplicate: data.user exists BUT data.session is null
-    // and user.identities will be empty OR user was not newly created
-
     // Check if it's a duplicate email (no identities means user already exists)
     if (data.user.identities && data.user.identities.length === 0) {
       logger.warn('Registration attempted with existing email (no identities)', {
@@ -78,22 +86,64 @@ export async function register(req: Request, res: Response) {
 
     // If no session but user has identities, email confirmation is required
     if (!data.session && data.user.identities && data.user.identities.length > 0) {
-      logger.info('User registered successfully - email confirmation required', { userId: data.user.id, email })
+      // Update the users table with the specified role
+      await supabase
+        .from('users')
+        .update({ role })
+        .eq('id', data.user.id)
+
+      // Fetch user profile with role
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('id, email, full_name, role, avatar_url')
+        .eq('id', data.user.id)
+        .single()
+
+      logger.info('User registered successfully - email confirmation required', { 
+        userId: data.user.id, 
+        email,
+        role 
+      })
       return res.status(201).json({
         message: 'Registration successful. Please check your email to confirm your account.',
         requiresEmailConfirmation: true,
         user: {
           id: data.user.id,
-          email: data.user.email
+          email: data.user.email,
+          full_name: userProfile?.full_name,
+          role: userProfile?.role || 'user',
+          avatar_url: userProfile?.avatar_url
         }
       })
     }
 
-    logger.info('User registered successfully', { userId: data.user.id, email })
+    logger.info('User registered successfully', { userId: data.user.id, email, role })
+
+    // Fetch user profile with role
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('id, email, full_name, role, avatar_url')
+      .eq('id', data.user.id)
+      .single()
+
+    // Update the users table with the specified role if different from default
+    if (role !== 'user') {
+      await supabase
+        .from('users')
+        .update({ role })
+        .eq('id', data.user.id)
+    }
 
     return res.status(201).json({
       message: 'User registered successfully',
-      user: data.user,
+      token: data.session?.access_token,
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        full_name: userProfile?.full_name,
+        role: role,
+        avatar_url: userProfile?.avatar_url
+      },
       session: data.session
     })
   } catch (err: any) {
@@ -125,9 +175,27 @@ export async function login(req: Request, res: Response) {
       return res.status(401).json({ error: error.message })
     }
 
+    // Fetch user profile with role from public.users
+    const { data: userProfile, error: profileError } = await supabase
+      .from('users')
+      .select('id, email, full_name, role, avatar_url')
+      .eq('id', data.user.id)
+      .single()
+
+    if (profileError) {
+      logger.warn('Could not fetch user profile', { userId: data.user.id, error: profileError.message })
+    }
+
     return res.json({
       message: 'Login successful',
-      user: data.user,
+      token: data.session?.access_token,
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        full_name: data.user.user_metadata?.full_name,
+        role: userProfile?.role || 'user',
+        avatar_url: userProfile?.avatar_url
+      },
       session: data.session
     })
   } catch (err: any) {
@@ -168,6 +236,7 @@ export async function getProfile(req: Request, res: Response) {
   try {
     // User is attached by requireAuth middleware after JWT verification
     const user = req.user
+    const userProfile = req.userProfile
 
     if (!user) {
       return res.status(401).json({ error: 'User not authenticated' })
@@ -177,8 +246,9 @@ export async function getProfile(req: Request, res: Response) {
       user: {
         id: user.id,
         email: user.email,
-        full_name: user.user_metadata?.full_name,
-        avatar_url: user.user_metadata?.avatar_url,
+        full_name: userProfile?.full_name,
+        role: userProfile?.role || 'user',
+        avatar_url: userProfile?.avatar_url,
         created_at: user.created_at,
         email_confirmed_at: user.email_confirmed_at
       }
@@ -200,6 +270,7 @@ export async function verifyToken(req: Request, res: Response) {
   try {
     // User is already verified by requireAuth middleware
     const user = req.user
+    const userProfile = req.userProfile
 
     if (!user) {
       return res.json({
@@ -215,7 +286,8 @@ export async function verifyToken(req: Request, res: Response) {
       user: {
         id: user.id,
         email: user.email,
-        full_name: user.user_metadata?.full_name,
+        full_name: userProfile?.full_name,
+        role: userProfile?.role || 'user',
         created_at: user.created_at
       }
     })

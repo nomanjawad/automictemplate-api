@@ -7,10 +7,10 @@ import {
 } from '@controllers'
 import {
   getAllUsers,
-  getUserByEmail,
+  getAllUsersPublic,
+  getUserById,
   updateProfile,
-  updateUser,
-  deleteUser,
+  deleteProfile,
   checkSession
 } from '@controllers'
 import { requireAuth } from '@middleware'
@@ -32,6 +32,13 @@ router.post('/register', register)
  * Login user with email and password
  */
 router.post('/login', login)
+
+/**
+ * GET /api/user/public/all
+ * Get all users (limited fields: full_name, email, role, created_at)
+ * No authentication required
+ */
+router.get('/public/all', getAllUsersPublic)
 
 // ============================================================================
 // Protected Routes (Authentication Required)
@@ -57,39 +64,32 @@ router.get('/profile', requireAuth, getProfile)
 router.put('/profile', requireAuth, updateProfile)
 
 /**
+ * DELETE /api/user/profile
+ * Delete current authenticated user's account permanently
+ * This deletes from auth.users which cascades to public.users
+ */
+router.delete('/profile', requireAuth, deleteProfile)
+
+/**
  * GET /api/user/session
  * Check if current session is active
- * Returns: { active: boolean, session?, user? }
+ * Returns: { session, user }
  */
 router.get('/session', requireAuth, checkSession)
 
 /**
  * GET /api/user
- * Get all users (no pagination, no filtering)
- * Dashboard will handle sorting/filtering
+ * Get all users (full details - internal only)
+ * Returns ALL user data - frontend handles visibility based on role
  */
 router.get('/', requireAuth, getAllUsers)
 
 /**
- * GET /api/user/email/:email
- * Get user by email address
- * Used for profile pages in dashboard
+ * GET /api/user/:id
+ * Get user by ID
+ * Returns all user info including email, role, metadata
+ * Frontend controls visibility based on user's role
  */
-router.get('/email/:email', requireAuth, getUserByEmail)
-
-/**
- * PUT /api/user/:id
- * Update any user by ID
- * Body: { full_name?, bio?, avatar_url?, role?, metadata? }
- * Dashboard uses this to update any user
- */
-router.put('/:id', requireAuth, updateUser)
-
-/**
- * DELETE /api/user/:id
- * Delete user by ID
- * Deletes from both auth.users and public.users (cascade)
- */
-router.delete('/:id', requireAuth, deleteUser)
+router.get('/:id', requireAuth, getUserById)
 
 export default router

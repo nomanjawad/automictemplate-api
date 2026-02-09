@@ -30,8 +30,16 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       return res.status(401).json({ error: 'Invalid or expired token' })
     }
 
+    // Fetch user profile with role from public.users
+    const { data: userProfile, error: profileError } = await supabaseClient
+      .from('users')
+      .select('id, email, full_name, role, avatar_url')
+      .eq('id', data.user.id)
+      .single()
+
     // Attach user to request object
     req.user = data.user
+    req.userProfile = userProfile || null
 
     next()
   } catch (err: any) {
@@ -57,11 +65,66 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
 
     if (data?.user) {
       req.user = data.user
+
+      // Fetch user profile with role
+      const { data: userProfile } = await supabaseClient
+        .from('users')
+        .select('id, email, full_name, role, avatar_url')
+        .eq('id', data.user.id)
+        .single()
+
+      req.userProfile = userProfile || null
     }
 
     next()
   } catch (err) {
     // Silently fail and continue without user
     next()
+  }
+}
+
+/**
+ * Role-Based Access Control Middleware
+ * Restricts endpoint access based on user role
+ * Usage: app.get('/admin', requireRole('admin'), controller)
+ */
+export function requireRole(requiredRole: 'admin' | 'moderator' | 'user') {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Must have auth first
+      if (!req.user) {
+        return res.status(401).json({ error: 'Authentication required' })
+      }
+
+      const userRole = req.userProfile?.role || 'user'
+
+      // Role hierarchy: admin > moderator > user
+      const roleHierarchy: Record<string, number> = {
+        admin: 3,
+        moderator: 2,
+        user: 1
+      }
+
+      const userRoleLevel = roleHierarchy[userRole] || 1
+      const requiredRoleLevel = roleHierarchy[requiredRole] || 1
+
+      if (userRoleLevel < requiredRoleLevel) {
+        logger.warn('Access denied - insufficient role', {
+          userId: req.user.id,
+          userRole,
+          requiredRole,
+          endpoint: req.path
+        })
+        return res.status(403).json({
+          error: `This action requires ${requiredRole} privileges`,
+          code: 'INSUFFICIENT_ROLE'
+        })
+      }
+
+      next()
+    } catch (err: any) {
+      logger.error('Role check middleware error', { error: err.message || err })
+      return res.status(500).json({ error: 'Authorization check failed' })
+    }
   }
 }
