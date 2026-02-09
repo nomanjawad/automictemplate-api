@@ -14,7 +14,8 @@ import { ApiError, DatabaseError } from '../utils/apiError.js'
 export function errorHandler(err: Error, req: Request, res: Response, _next: NextFunction) {
   // Convert database errors to ApiError
   let error = err
-  if (err.name === 'PostgrestError' || (err as any).code) {
+  const isKnownApiError = err instanceof ApiError || err instanceof AppError
+  if (!isKnownApiError && (err.name === 'PostgrestError' || (err as any).code)) {
     error = new DatabaseError(err)
   }
 
