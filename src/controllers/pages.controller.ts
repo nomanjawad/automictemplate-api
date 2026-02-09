@@ -47,7 +47,7 @@ export const getAllPages = asyncHandler(async (req: Request, res: Response) => {
   logger.info('Fetched all pages', { count: pages?.length || 0 })
 
   // Transform response to include author info directly
-  const pagesWithAuthor = pages?.map(page => ({
+  const pagesWithAuthor = pages?.map((page: any) => ({
     id: page.id,
     title: page.title,
     slug: page.slug,
@@ -239,8 +239,7 @@ export const updatePage = asyncHandler(async (req: Request, res: Response) => {
   const validStatuses = ['draft', 'review', 'scheduled', 'published', 'archived']
   if (status && !validStatuses.includes(status)) {
     throw new BadRequestError(
-      `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
-      { validValues: validStatuses }
+      `Invalid status. Must be one of: ${validStatuses.join(', ')}`
     )
   }
 

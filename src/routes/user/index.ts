@@ -10,6 +10,7 @@ import {
   getAllUsersPublic,
   getUserById,
   updateProfile,
+  updateUser,
   deleteProfile,
   checkSession
 } from '@controllers'
@@ -59,7 +60,7 @@ router.get('/profile', requireAuth, getProfile)
 /**
  * PUT /api/user/profile
  * Update current authenticated user's profile
- * Body: { full_name?, bio?, avatar_url?, metadata? }
+ * Body: { email?, full_name?, role?, bio?, avatar_url?, metadata? }
  */
 router.put('/profile', requireAuth, updateProfile)
 
@@ -79,10 +80,18 @@ router.get('/session', requireAuth, checkSession)
 
 /**
  * GET /api/user
- * Get all users (full details - internal only)
+ * Get all users (full details)
  * Returns ALL user data - frontend handles visibility based on role
  */
 router.get('/', requireAuth, getAllUsers)
+
+/**
+ * PUT /api/user/:id
+ * Update any user by ID (for admin/moderator management)
+ * Frontend controls which roles can access this
+ * Body: { email?, full_name?, role?, bio?, avatar_url?, metadata? }
+ */
+router.put('/:id', requireAuth, updateUser)
 
 /**
  * GET /api/user/:id

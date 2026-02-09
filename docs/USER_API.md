@@ -28,8 +28,6 @@ The User API provides endpoints for user authentication, profile management, and
 }
 ```
 
----
-
 ## Endpoints
 
 ### 1. Register User (Public)
@@ -362,7 +360,9 @@ Content-Type: application/json
 **Request Body**:
 ```json
 {
+  "email": "newemail@example.com",
   "full_name": "John Updated",
+  "role": "moderator",
   "bio": "Updated bio",
   "avatar_url": "https://example.com/new-avatar.jpg",
   "metadata": { "theme": "light", "notifications": false }
@@ -372,12 +372,14 @@ Content-Type: application/json
 **Request Parameters**:
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| email | string | No | New email address (must be unique) |
 | full_name | string | No | User's full name |
 | bio | string | No | User bio/description |
 | avatar_url | string | No | Profile picture URL |
+| role | string | No | User role: 'user', 'admin', 'moderator' |
 | metadata | object | No | Custom metadata (JSON) |
 
-**Note**: Users **cannot** update: email, password, or role through this endpoint.
+**Note**: All fields are optional. Provide only the fields you want to update. Frontend controls which fields users can modify.
 
 **Response** (200):
 ```json
@@ -385,15 +387,42 @@ Content-Type: application/json
   "message": "Profile updated successfully",
   "user": {
     "id": "user-uuid-123",
-    "email": "user@example.com",
+    "email": "newemail@example.com",
     "full_name": "John Updated",
-    "role": "user",
+    "role": "moderator",
     "avatar_url": "https://example.com/new-avatar.jpg",
     "bio": "Updated bio",
     "metadata": { "theme": "light", "notifications": false },
     "created_at": "2026-02-09T10:30:00Z",
     "updated_at": "2026-02-09T12:00:00Z"
   }
+}
+```
+
+**Field Restrictions**:
+- `password` - Cannot be updated via this endpoint (use dedicated password change endpoint if needed)
+- `id`, `created_at` - System fields, read-only
+
+**Email Update Notes**:
+- Email is updated in both `public.users` and `auth.users` tables
+- Email must be unique across the system
+- Returns 409 Conflict if email already exists
+
+**Error** (409):
+```json
+{
+  "error": "This email is already in use by another account",
+  "code": "23505",
+  "details": { }
+}
+```
+
+**Error** (400):
+```json
+{
+  "error": "Invalid role. Must be: user, admin, or moderator",
+  "code": "BAD_REQUEST",
+  "details": { }
 }
 ```
 
@@ -406,18 +435,115 @@ Content-Type: application/json
 }
 ```
 
+---
+
+### 8. Update Any User by ID (Protected)
+
+Update any user by their ID. Used by admin/moderators to manage other users. Frontend controls which roles can access this endpoint.
+
+**Endpoint**: `PUT /api/user/:id`
+
+**Authentication**: Required (Bearer token)
+
+**URL Parameters**:
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| id | string | Yes | User UUID to update |
+
+**Headers**:
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "email": "admin@example.com",
+  "full_name": "Admin User",
+  "role": "admin",
+  "bio": "System administrator",
+  "avatar_url": "https://example.com/admin-avatar.jpg",
+  "metadata": { "department": "management" }
+}
+```
+
+**Request Parameters**:
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| email | string | No | New email address (must be unique) |
+| full_name | string | No | User's full name |
+| bio | string | No | User bio/description |
+| avatar_url | string | No | Profile picture URL |
+| role | string | No | User role: 'user', 'admin', 'moderator' |
+| metadata | object | No | Custom metadata (JSON) |
+
+**Note**: All fields are optional. Provide only the fields you want to update.
+
+**Example**: `PUT /api/user/user-uuid-456`
+
+**Response** (200):
+```json
+{
+  "message": "User updated successfully",
+  "user": {
+    "id": "user-uuid-456",
+    "email": "admin@example.com",
+    "full_name": "Admin User",
+    "role": "admin",
+    "avatar_url": "https://example.com/admin-avatar.jpg",
+    "bio": "System administrator",
+    "metadata": { "department": "management" },
+    "created_at": "2026-01-15T08:20:00Z",
+    "updated_at": "2026-02-09T13:45:00Z"
+  }
+}
+```
+
+**Email Update Notes**:
+- Email is updated in both `public.users` and `auth.users` tables
+- Email must be unique across the system
+- Returns 409 Conflict if email already exists
+
+**Error** (404):
+```json
+{
+  "error": "User not found",
+  "code": "NOT_FOUND",
+  "details": { }
+}
+```
+
+**Error** (409):
+```json
+{
+  "error": "This email is already in use by another account",
+  "code": "23505",
+  "details": { }
+}
+```
+
 **Error** (400):
 ```json
 {
-  "error": "At least one field must be provided for update",
+  "error": "Invalid role. Must be: user, admin, or moderator",
   "code": "BAD_REQUEST",
+  "details": { }
+}
+```
+
+**Error** (401):
+```json
+{
+  "error": "Unauthorized",
+  "code": "UNAUTHORIZED",
   "details": { }
 }
 ```
 
 ---
 
-### 8. Delete Own Account (Protected)
+### 9. Delete Own Account (Protected)
 
 Permanently delete the authenticated user's account. This will delete the user from `auth.users` which cascades to `public.users`.
 
@@ -461,7 +587,7 @@ Authorization: Bearer <token>
 
 ---
 
-### 9. Check Session (Protected)
+### 10. Check Session (Protected)
 
 Verify if the current session is valid.
 
@@ -512,7 +638,7 @@ Authorization: Bearer <token>
 
 ---
 
-### 10. Logout (Protected)
+### 11. Logout (Protected)
 
 Logout the current user and invalidate their session.
 
@@ -603,90 +729,52 @@ Clear stored token
 
 This API uses a **frontend-driven authorization** approach:
 
-1. **Backend Role**: Acts as a data layer - returns all requested data without permission checks
-2. **Frontend Role**: Controls what users can see and do based on their role
+1. **Backend Role**: Acts as a data layer - accepts all data modifications without permission checks
+2. **Frontend Role**: Controls what users can see and edit based on their role
 3. **Trust Model**: System trusts frontend to enforce permissions
 4. **Benefits**:
-   - More flexible permission system
-   - Easier to add features without backend changes
-   - Simpler API endpoints
+   - More flexible and faster to implement
+   - Easier to add new features without backend changes
+   - Users can see all data, frontend decides what's editable
+   - Simple, clean API endpoints
 
-### Example: Role Hierarchy
+### Example: Field-Level Permissions
 
 ```
-User Permissions:
-  - View own profile
-  - Update own profile
-  - View public user list
-  - View any user by ID (but frontend hides sensitive data)
+Regular User Can Edit:
+  - full_name, bio, avatar_url
+  - metadata (own data)
+  
+Moderator Can Edit:
+  - All user fields
+  - Manage other users via API
 
-Moderator Permissions:
-  - All user permissions
-  - View full user details
-  - Manage content (pages, blog posts)
-
-Admin Permissions:
-  - All permissions
-  - Manage all users
-  - System settings
+Admin Can Edit:
+  - Everything
+  - All user accounts
 ```
 
-**Important**: Always validate permission on frontend before showing sensitive data or allowing actions!
-
----
-
-## Response Format
-
-All responses follow this structure:
-
-**Success** (2xx):
-```json
-{
-  "user": { ... },        // Single user object
-  "users": [ ... ],       // Array of users
-  "message": "...",       // Success message
-  "session": { ... },     // Session data
-  "token": "...",         // JWT token
-}
-```
-
-**Error** (4xx, 5xx):
-```json
-{
-  "error": "Human readable error message",
-  "code": "ERROR_CODE",
-  "details": {
-    // Additional error context
-  }
-}
-```
-
----
-
-## Rate Limiting
-
-Currently no rate limiting is configured. Add rate limiting middleware if needed.
-
----
-
-## CORS
-
-CORS is enabled for all origins. Configure in production for security.
+**IMPORTANT**: Frontend must validate and enforce these rules. Backend will accept ANY data sent to it.
 
 ---
 
 ## Tips for Frontend
 
-1. **Token Storage**: Store JWT token in secure location (not public localStorage for sensitive apps)
+1. **Token Storage**: Store JWT token securely (not localStorage for sensitive apps)
 2. **Token Refresh**: Implement refresh token logic if tokens expire
-3. **User Role**: Always cache user role after login to make authorization checks faster
-4. **Public Endpoint**: Use `GET /api/user/public/all` for public user listings without auth
-5. **Private Data**: Fetch `GET /api/user/:id` for full user data, but only display what their role allows
-6. **Session Check**: Call `GET /api/user/session` on app load to verify session validity
-7. **Error Handling**: Check error codes to provide user-friendly error messages
-8. **Metadata**: Use metadata field to store user preferences, settings, etc.
-
----
+3. **User Role**: Cache user role after login for faster auth checks
+4. **Public Endpoint**: Use `GET /api/user/public/all` for displaying users without auth
+5. **Email Changes**: Email updates are synced to auth.users automatically
+6. **Role Updates**: Frontend controls visibility, backend stores all data
+7. **Field Visibility**: Show/hide fields based on user's role
+8. **Validation**: Validate data before sending (email format, password strength, etc.)
+9. **Session Check**: Call `GET /api/user/session` on app load to verify session validity
+10. **Error Handling**: Check error codes to provide user-friendly error messages
+11. **Metadata**: Use metadata field to store user preferences, settings, UI state
+12. **Optimistic Updates**: Update UI immediately, sync with backend in background
+13. **Conflict Resolution**: Handle concurrent edits of same user profile gracefully
+14. **Permission Enforcement**: Always validate what current user can edit BEFORE sending
+15. **Email Uniqueness**: Check email is unique before submitting update
 
 ## Database Schema
 

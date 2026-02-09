@@ -39,7 +39,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
     // Attach user to request object
     req.user = data.user
-    req.userProfile = userProfile || null
+    req.userProfile = userProfile || undefined
 
     next()
   } catch (err: any) {
@@ -73,7 +73,7 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
         .eq('id', data.user.id)
         .single()
 
-      req.userProfile = userProfile || null
+      req.userProfile = userProfile || undefined
     }
 
     next()
