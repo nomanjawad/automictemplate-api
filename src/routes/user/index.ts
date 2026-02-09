@@ -12,6 +12,7 @@ import {
   updateProfile,
   updateUser,
   deleteProfile,
+  deleteUser,
   checkSession
 } from '@controllers'
 import { requireAuth } from '@middleware'
@@ -92,6 +93,14 @@ router.get('/', requireAuth, getAllUsers)
  * Body: { email?, full_name?, role?, bio?, avatar_url?, metadata? }
  */
 router.put('/:id', requireAuth, updateUser)
+
+/**
+ * DELETE /api/user/:id
+ * Delete any user by ID (for admin management)
+ * Permanently deletes from auth.users which cascades to public.users
+ * Frontend controls which roles can access this
+ */
+router.delete('/:id', requireAuth, deleteUser)
 
 /**
  * GET /api/user/:id

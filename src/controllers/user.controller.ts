@@ -378,6 +378,81 @@ export const deleteProfile = asyncHandler(async (req: Request, res: Response) =>
 })
 
 /**
+ * Delete user by ID (admin function)
+ * Permanently deletes from auth.users which cascades to public.users
+ */
+export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params
+
+  if (!supabase) {
+    logger.error('Supabase client not configured')
+    throw new InternalServerError('Database service unavailable')
+  }
+
+  // Verify user exists
+  const { data: existingUser, error: fetchError } = await supabase
+    .from('users')
+    .select('id, email')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (fetchError) {
+    logger.error('Failed to fetch user for deletion', { 
+      error: fetchError.message,
+      userId: id 
+    })
+    throw new ApiNotFoundError('User not found')
+  }
+
+  if (!existingUser) {
+    logger.warn('User not found for deletion', { userId: id })
+    throw new ApiNotFoundError('User not found')
+  }
+
+  logger.info('Deleting user', { userId: id, deletedBy: req.user?.id })
+
+  // Step 1: Delete from public.users first (this will SET NULL on all FK references)
+  const { error: publicDeleteError } = await supabase
+    .from('users')
+    .delete()
+    .eq('id', id)
+
+  if (publicDeleteError) {
+    logger.error('Failed to delete user from public.users', { 
+      error: publicDeleteError.message,
+      code: publicDeleteError.code,
+      details: publicDeleteError.details,
+      userId: id 
+    })
+    throw new InternalServerError('Failed to delete user from database')
+  }
+
+  logger.info('Deleted user from public.users, now deleting from auth', { userId: id })
+
+  // Step 2: Delete from auth.users
+  const { error: authError } = await supabase.auth.admin.deleteUser(id)
+
+  if (authError) {
+    logger.error('Failed to delete user from auth.users', { 
+      error: authError.message,
+      errorName: authError.name,
+      errorStatus: (authError as any).status,
+      errorCode: (authError as any).code,
+      userId: id 
+    })
+    // Note: public.users already deleted, so partial success
+    // In production, consider implementing a cleanup job
+    throw new InternalServerError('User partially deleted - removed from database but auth record remains')
+  }
+
+  logger.info('User deleted successfully', { userId: id, deletedBy: req.user?.id })
+
+  return res.json({
+    message: 'User deleted successfully'
+  })
+})
+
+/**
  * Check active session
  * Returns current user's session info with role
  */

@@ -587,7 +587,66 @@ Authorization: Bearer <token>
 
 ---
 
-### 10. Check Session (Protected)
+### 10. Delete User by ID (Protected)
+
+Permanently delete any user account by ID. This is intended for admin use. The deletion removes the user from `auth.users` which cascades to `public.users`.
+
+**Endpoint**: `DELETE /api/user/:id`
+
+**Authentication**: Required (Bearer token)
+
+**Headers**:
+```
+Authorization: Bearer <token>
+```
+
+**Path Parameters**:
+- `id` (string, required): User UUID to delete
+
+**Request Body**: None
+
+**Response** (200):
+```json
+{
+  "message": "User deleted successfully"
+}
+```
+
+**Frontend Note**: 
+- This endpoint should typically be restricted to admin users in the frontend
+- After deletion, if the deleted user has an active session, redirect them to login
+- Update user lists in the UI to remove the deleted user
+
+**Error** (404):
+```json
+{
+  "error": "User not found",
+  "code": "NOT_FOUND",
+  "details": { }
+}
+```
+
+**Error** (401):
+```json
+{
+  "error": "Unauthorized",
+  "code": "UNAUTHORIZED",
+  "details": { }
+}
+```
+
+**Error** (500):
+```json
+{
+  "error": "Failed to delete user account",
+  "code": "INTERNAL_SERVER_ERROR",
+  "details": { }
+}
+```
+
+---
+
+### 11. Check Session (Protected)
 
 Verify if the current session is valid.
 
@@ -638,7 +697,7 @@ Authorization: Bearer <token>
 
 ---
 
-### 11. Logout (Protected)
+### 12. Logout (Protected)
 
 Logout the current user and invalidate their session.
 
