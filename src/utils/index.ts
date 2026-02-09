@@ -3,7 +3,7 @@
  * @description Barrel export for utility modules
  */
 
-// Export all error classes
+// Export legacy error classes (for backward compatibility)
 export {
   AppError,
   ValidationError,
@@ -15,6 +15,20 @@ export {
   ServiceUnavailableError,
   DatabaseError,
 } from './errors.js'
+
+// Export new centralized error classes
+export {
+  ApiError,
+  BadRequestError,
+  UnauthorizedError as ApiUnauthorizedError,
+  ForbiddenError as ApiForbiddenError,
+  NotFoundError as ApiNotFoundError,
+  ConflictError as ApiConflictError,
+  InternalServerError,
+  DatabaseError as ApiDatabaseError,
+  asyncHandler,
+  parseDatabaseError,
+} from './apiError.js'
 
 // Export logger
 export { logger, stream } from './logger.js'

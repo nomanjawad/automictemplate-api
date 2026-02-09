@@ -25,18 +25,18 @@ const router = Router()
 router.get('/', requireAuth, getAllPages)
 
 /**
- * GET /api/pages/:id
- * Get page by ID with full dataset
+ * GET /api/pages/:slug
+ * Get page by slug with full dataset
  * Returns: Complete page data including JSONB content, author info
  */
-router.get('/:id', requireAuth, getPageById)
+router.get('/:slug', requireAuth, getPageById)
 
 /**
- * GET /api/pages/:id/history
- * Get page version history
+ * GET /api/pages/:slug/history
+ * Get page version history by slug
  * Returns: All versions with who changed it and when
  */
-router.get('/:id/history', requireAuth, getPageHistory)
+router.get('/:slug/history', requireAuth, getPageHistory)
 
 /**
  * POST /api/pages
@@ -48,25 +48,25 @@ router.get('/:id/history', requireAuth, getPageHistory)
 router.post('/', requireAuth, createPage)
 
 /**
- * PUT /api/pages/:id
- * Update a page by ID
+ * PUT /api/pages/:slug
+ * Update a page by slug
  * Body: { title?, slug?, data?, meta_data?, status? }
  * Auto-sets last_modified_by and tracks changes in content_history
  * Status can be: 'draft', 'review', 'scheduled', 'published', 'archived'
  */
-router.put('/:id', requireAuth, updatePage)
+router.put('/:slug', requireAuth, updatePage)
 
 /**
- * POST /api/pages/:id/restore/:version
- * Restore a page to a previous version
+ * POST /api/pages/:slug/restore/:version
+ * Restore a page to a previous version by slug
  * Returns: Updated page with restored content
  */
-router.post('/:id/restore/:version', requireAuth, restorePageVersion)
+router.post('/:slug/restore/:version', requireAuth, restorePageVersion)
 
 /**
- * DELETE /api/pages/:id
- * Delete page by ID
+ * DELETE /api/pages/:slug
+ * Delete page by slug
  */
-router.delete('/:id', requireAuth, deletePage)
+router.delete('/:slug', requireAuth, deletePage)
 
 export default router
