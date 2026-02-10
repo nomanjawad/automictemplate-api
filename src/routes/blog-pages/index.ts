@@ -6,7 +6,9 @@ import {
   updateBlogPost,
   deleteBlogPost,
   getBlogPostHistory,
-  restoreBlogPostVersion
+  restoreBlogPostVersion,
+  getBlogPostsByCategory,
+  getBlogPostsByTag
 } from '@controllers'
 import { requireAuth } from '@middleware'
 
@@ -21,6 +23,18 @@ const router = Router()
  * Get all blog posts with basic metadata and author information
  */
 router.get('/', requireAuth, getAllBlogPosts)
+
+/**
+ * GET /api/blog-pages/category/:slug
+ * Get all blog posts filtered by category slug (public)
+ */
+router.get('/category/:slug', getBlogPostsByCategory)
+
+/**
+ * GET /api/blog-pages/tag/:slug
+ * Get all blog posts filtered by tag slug (public)
+ */
+router.get('/tag/:slug', getBlogPostsByTag)
 
 /**
  * GET /api/blog-pages/:slug

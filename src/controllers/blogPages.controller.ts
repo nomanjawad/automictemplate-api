@@ -15,14 +15,17 @@ const validStatuses = ['draft', 'review', 'scheduled', 'published', 'archived']
 
 /**
  * Get all blog posts with basic metadata and author information
+ * Supports filtering by category_id and tag_ids
  */
-export const getAllBlogPosts = asyncHandler(async (_req: Request, res: Response) => {
+export const getAllBlogPosts = asyncHandler(async (req: Request, res: Response) => {
+  const { category_id, tag_ids } = req.query
+
   if (!supabase) {
     logger.error('Supabase client not configured')
     throw new InternalServerError('Database service unavailable')
   }
 
-  const { data: posts, error } = await supabase
+  let query = supabase
     .from('blog_posts')
     .select(`
       id,
@@ -31,8 +34,6 @@ export const getAllBlogPosts = asyncHandler(async (_req: Request, res: Response)
       status,
       excerpt,
       featured_image,
-      tags,
-      category,
       meta_data,
       published,
       published_at,
@@ -44,24 +45,42 @@ export const getAllBlogPosts = asyncHandler(async (_req: Request, res: Response)
       version,
       author_id,
       last_modified_by,
+      category_id,
+      blog_categories!blog_posts_category_id_fkey(id, name, slug),
+      blog_post_tags(tag_id),
       users:author_id(id, email, full_name)
     `)
     .order('created_at', { ascending: false })
+
+  // Filter by category if provided
+  if (category_id) {
+    query = query.eq('category_id', category_id as string)
+  }
+
+  const { data: posts, error } = await query
 
   if (error) {
     logger.error('Failed to fetch blog posts', { error: error.message })
     throw new ApiDatabaseError(error)
   }
 
-  const postsWithAuthor = posts?.map((post: any) => ({
+  // Filter by tags if provided
+  let filteredPosts = posts || []
+  if (tag_ids) {
+    const tagIdArray = (tag_ids as string).split(',')
+    filteredPosts = filteredPosts.filter((post: any) => {
+      const postTagIds = (post.blog_post_tags || []).map((r: any) => r.tag_id)
+      return tagIdArray.some(tagId => postTagIds.includes(tagId))
+    })
+  }
+
+  const postsWithData = filteredPosts.map((post: any) => ({
     id: post.id,
     title: post.title,
     slug: post.slug,
     status: post.status,
     excerpt: post.excerpt,
     featured_image: post.featured_image,
-    tags: post.tags,
-    category: post.category,
     meta_data: post.meta_data,
     published: post.published,
     published_at: post.published_at,
@@ -73,13 +92,16 @@ export const getAllBlogPosts = asyncHandler(async (_req: Request, res: Response)
     version: post.version,
     author_id: post.author_id,
     last_modified_by: post.last_modified_by,
+    category_id: post.category_id,
+    category: post.blog_categories || null,
+    tag_ids: (post.blog_post_tags || []).map((r: any) => r.tag_id),
     author_name: post.users?.full_name || 'Unknown',
     author_email: post.users?.email || null
-  })) || []
+  }))
 
   return res.json({
-    posts: postsWithAuthor,
-    total: postsWithAuthor.length
+    posts: postsWithData,
+    total: postsWithData.length
   })
 })
 
@@ -102,6 +124,8 @@ export const getBlogPostBySlug = asyncHandler(async (req: Request, res: Response
     .from('blog_posts')
     .select(`
       *,
+      blog_categories!blog_posts_category_id_fkey(id, name, slug, description),
+      blog_post_tags(tag_id),
       users:author_id(id, email, full_name)
     `)
     .eq('slug', slug)
@@ -121,9 +145,23 @@ export const getBlogPostBySlug = asyncHandler(async (req: Request, res: Response
     throw new ApiDatabaseError(error)
   }
 
+  // Fetch full tag data
+  let tags: any[] = []
+  const tagIds = (post.blog_post_tags || []).map((r: any) => r.tag_id)
+  if (tagIds.length > 0) {
+    const { data: tagsData } = await supabase
+      .from('blog_tags')
+      .select('*')
+      .in('id', tagIds)
+    tags = tagsData || []
+  }
+
   return res.json({
     post: {
       ...post,
+      category: post.blog_categories || null,
+      tags,
+      tag_ids: tagIds,
       author_name: post.users?.full_name || 'Unknown',
       author_email: post.users?.email || null
     }
@@ -169,6 +207,44 @@ export const createBlogPost = asyncHandler(async (req: Request, res: Response) =
     throw new InternalServerError('Database service unavailable')
   }
 
+  // Resolve category slug to category_id
+  let categoryId: string | null = null
+  if (category) {
+    const { data: categoryData, error: categoryError } = await supabase
+      .from('blog_categories')
+      .select('id')
+      .eq('slug', category)
+      .single()
+
+    if (categoryError || !categoryData) {
+      logger.warn('Category not found', { category, slug })
+      throw new BadRequestError(`Category '${category}' not found. Please create it first.`)
+    }
+    categoryId = categoryData.id
+  }
+
+  // Resolve tag slugs to tag IDs
+  let tagIds: string[] = []
+  if (tags && Array.isArray(tags) && tags.length > 0) {
+    const { data: tagsData, error: tagsError } = await supabase
+      .from('blog_tags')
+      .select('id, slug')
+      .in('slug', tags)
+
+    if (tagsError) {
+      logger.error('Failed to resolve tags', { error: tagsError.message, tags })
+      throw new ApiDatabaseError(tagsError)
+    }
+
+    if (!tagsData || tagsData.length !== tags.length) {
+      const foundSlugs = tagsData?.map((t: any) => t.slug) || []
+      const missingSlugs = tags.filter((t: string) => !foundSlugs.includes(t))
+      throw new BadRequestError(`Tags not found: ${missingSlugs.join(', ')}. Please create them first.`)
+    }
+
+    tagIds = tagsData.map((t: any) => t.id)
+  }
+
   const resolvedStatus = status || 'draft'
   const isPublished = resolvedStatus === 'published'
 
@@ -180,14 +256,13 @@ export const createBlogPost = asyncHandler(async (req: Request, res: Response) =
       content,
       excerpt: excerpt || null,
       featured_image: featured_image || null,
-      tags: tags || null,
       meta_data: meta_data || null,
       status: resolvedStatus,
       published: isPublished,
       published_at: isPublished ? new Date().toISOString() : null,
       author_id: userId,
       last_modified_by: userId,
-      category: category || null,
+      category_id: categoryId,
       reading_time_minutes: reading_time_minutes || null,
       scheduled_at: scheduled_at || null
     })
@@ -229,11 +304,24 @@ export const createBlogPost = asyncHandler(async (req: Request, res: Response) =
     throw new ApiDatabaseError(error)
   }
 
-  logger.info('Blog post created successfully', { postId: post.id, slug, userId })
+  // Add tags if provided
+  if (tagIds.length > 0) {
+    const tagRecords = tagIds.map(tagId => ({
+      blog_post_id: post.id,
+      tag_id: tagId
+    }))
+    await supabase.from('blog_post_tags').insert(tagRecords)
+  }
+
+  logger.info('Blog post created successfully', { postId: post.id, slug, userId, category, tags: tags || [], tagCount: tagIds.length })
 
   return res.status(201).json({
     message: 'Blog post created successfully',
-    post
+    post: {
+      ...post,
+      category: category || null,
+      tags: tags || []
+    }
   })
 })
 
@@ -281,6 +369,52 @@ export const updateBlogPost = asyncHandler(async (req: Request, res: Response) =
     throw new InternalServerError('Database service unavailable')
   }
 
+  // Resolve category slug to category_id if provided
+  let categoryId: string | null | undefined = undefined
+  if (category !== undefined) {
+    if (category === null || category === '') {
+      categoryId = null
+    } else {
+      const { data: categoryData, error: categoryError } = await supabase
+        .from('blog_categories')
+        .select('id')
+        .eq('slug', category)
+        .single()
+
+      if (categoryError || !categoryData) {
+        logger.warn('Category not found', { category, slug })
+        throw new BadRequestError(`Category '${category}' not found. Please create it first.`)
+      }
+      categoryId = categoryData.id
+    }
+  }
+
+  // Resolve tag slugs to tag IDs if provided
+  let tagIds: string[] | undefined = undefined
+  if (tags !== undefined) {
+    if (tags.length === 0) {
+      tagIds = []
+    } else {
+      const { data: tagsData, error: tagsError } = await supabase
+        .from('blog_tags')
+        .select('id, slug')
+        .in('slug', tags)
+
+      if (tagsError) {
+        logger.error('Failed to resolve tags', { error: tagsError.message, tags })
+        throw new ApiDatabaseError(tagsError)
+      }
+
+      if (!tagsData || tagsData.length !== tags.length) {
+        const foundSlugs = tagsData?.map((t: any) => t.slug) || []
+        const missingSlugs = tags.filter((t: string) => !foundSlugs.includes(t))
+        throw new BadRequestError(`Tags not found: ${missingSlugs.join(', ')}. Please create them first.`)
+      }
+
+      tagIds = tagsData.map((t: any) => t.id)
+    }
+  }
+
   const updateData: any = {
     last_modified_by: userId,
     updated_at: new Date().toISOString()
@@ -291,14 +425,13 @@ export const updateBlogPost = asyncHandler(async (req: Request, res: Response) =
   if (content !== undefined) updateData.content = content
   if (excerpt !== undefined) updateData.excerpt = excerpt
   if (featured_image !== undefined) updateData.featured_image = featured_image
-  if (tags !== undefined) updateData.tags = tags
   if (meta_data !== undefined) updateData.meta_data = meta_data
   if (status !== undefined) {
     updateData.status = status
     updateData.published = status === 'published'
     updateData.published_at = status === 'published' ? new Date().toISOString() : null
   }
-  if (category !== undefined) updateData.category = category
+  if (categoryId !== undefined) updateData.category_id = categoryId
   if (reading_time_minutes !== undefined) updateData.reading_time_minutes = reading_time_minutes
   if (scheduled_at !== undefined) updateData.scheduled_at = scheduled_at
 
@@ -341,11 +474,29 @@ export const updateBlogPost = asyncHandler(async (req: Request, res: Response) =
     throw new ApiDatabaseError(error)
   }
 
-  logger.info('Blog post updated successfully', { postId: post.id, slug, userId })
+  // Update tags if provided
+  if (tagIds !== undefined) {
+    // Delete existing tags
+    await supabase.from('blog_post_tags').delete().eq('blog_post_id', post.id)
+    // Insert new tags
+    if (tagIds.length > 0) {
+      const tagRecords = tagIds.map(tagId => ({
+        blog_post_id: post.id,
+        tag_id: tagId
+      }))
+      await supabase.from('blog_post_tags').insert(tagRecords)
+    }
+  }
+
+  logger.info('Blog post updated successfully', { postId: post.id, slug, userId, category, tags, tagsUpdated: tagIds !== undefined })
 
   return res.json({
     message: 'Blog post updated successfully',
-    post
+    post: {
+      ...post,
+      category: category !== undefined ? category : undefined,
+      tags: tags !== undefined ? tags : undefined
+    }
   })
 })
 
@@ -570,5 +721,221 @@ export const restoreBlogPostVersion = asyncHandler(async (req: Request, res: Res
   return res.json({
     message: `Blog post successfully restored to version ${version}`,
     post: updatedPost
+  })
+})
+
+/**
+ * Get blog posts filtered by category slug
+ */
+export const getBlogPostsByCategory = asyncHandler(async (req: Request, res: Response) => {
+  const { slug } = req.params
+
+  if (!slug) {
+    throw new BadRequestError('Category slug is required')
+  }
+
+  if (!supabase) {
+    logger.error('Supabase client not configured')
+    throw new InternalServerError('Database service unavailable')
+  }
+
+  // First, get the category by slug
+  const { data: category, error: categoryError } = await supabase
+    .from('blog_categories')
+    .select('id, name, slug, description')
+    .eq('slug', slug)
+    .single()
+
+  if (categoryError || !category) {
+    logger.warn('Category not found for filtering', { slug })
+    throw new ApiNotFoundError('Category not found')
+  }
+
+  // Get all posts with this category
+  const { data: posts, error } = await supabase
+    .from('blog_posts')
+    .select(`
+      id,
+      title,
+      slug,
+      status,
+      excerpt,
+      featured_image,
+      meta_data,
+      published,
+      published_at,
+      scheduled_at,
+      view_count,
+      reading_time_minutes,
+      created_at,
+      updated_at,
+      version,
+      author_id,
+      category_id,
+      blog_categories!blog_posts_category_id_fkey(id, name, slug),
+      blog_post_tags(tag_id),
+      users:author_id(id, email, full_name)
+    `)
+    .eq('category_id', category.id)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    logger.error('Failed to fetch blog posts by category', { error: error.message, slug })
+    throw new ApiDatabaseError(error)
+  }
+
+  const postsWithData = (posts || []).map((post: any) => ({
+    id: post.id,
+    title: post.title,
+    slug: post.slug,
+    status: post.status,
+    excerpt: post.excerpt,
+    featured_image: post.featured_image,
+    meta_data: post.meta_data,
+    published: post.published,
+    published_at: post.published_at,
+    scheduled_at: post.scheduled_at,
+    view_count: post.view_count,
+    reading_time_minutes: post.reading_time_minutes,
+    created_at: post.created_at,
+    updated_at: post.updated_at,
+    version: post.version,
+    author_id: post.author_id,
+    category_id: post.category_id,
+    category: post.blog_categories || null,
+    tag_ids: (post.blog_post_tags || []).map((r: any) => r.tag_id),
+    author_name: post.users?.full_name || 'Unknown',
+    author_email: post.users?.email || null
+  }))
+
+  return res.json({
+    category: {
+      id: category.id,
+      name: category.name,
+      slug: category.slug,
+      description: category.description
+    },
+    posts: postsWithData,
+    total: postsWithData.length
+  })
+})
+
+/**
+ * Get blog posts filtered by tag slug
+ */
+export const getBlogPostsByTag = asyncHandler(async (req: Request, res: Response) => {
+  const { slug } = req.params
+
+  if (!slug) {
+    throw new BadRequestError('Tag slug is required')
+  }
+
+  if (!supabase) {
+    logger.error('Supabase client not configured')
+    throw new InternalServerError('Database service unavailable')
+  }
+
+  // First, get the tag by slug
+  const { data: tag, error: tagError } = await supabase
+    .from('blog_tags')
+    .select('id, name, slug')
+    .eq('slug', slug)
+    .single()
+
+  if (tagError || !tag) {
+    logger.warn('Tag not found for filtering', { slug })
+    throw new ApiNotFoundError('Tag not found')
+  }
+
+  // Get all post IDs with this tag from junction table
+  const { data: postTagRelations, error: relationError } = await supabase
+    .from('blog_post_tags')
+    .select('blog_post_id')
+    .eq('tag_id', tag.id)
+
+  if (relationError) {
+    logger.error('Failed to fetch post-tag relations', { error: relationError.message, slug })
+    throw new ApiDatabaseError(relationError)
+  }
+
+  if (!postTagRelations || postTagRelations.length === 0) {
+    return res.json({
+      tag: {
+        id: tag.id,
+        name: tag.name,
+        slug: tag.slug
+      },
+      posts: [],
+      total: 0
+    })
+  }
+
+  const postIds = postTagRelations.map((r: any) => r.blog_post_id)
+
+  // Get all posts with these IDs
+  const { data: posts, error } = await supabase
+    .from('blog_posts')
+    .select(`
+      id,
+      title,
+      slug,
+      status,
+      excerpt,
+      featured_image,
+      meta_data,
+      published,
+      published_at,
+      scheduled_at,
+      view_count,
+      reading_time_minutes,
+      created_at,
+      updated_at,
+      version,
+      author_id,
+      category_id,
+      blog_categories!blog_posts_category_id_fkey(id, name, slug),
+      blog_post_tags(tag_id),
+      users:author_id(id, email, full_name)
+    `)
+    .in('id', postIds)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    logger.error('Failed to fetch blog posts by tag', { error: error.message, slug })
+    throw new ApiDatabaseError(error)
+  }
+
+  const postsWithData = (posts || []).map((post: any) => ({
+    id: post.id,
+    title: post.title,
+    slug: post.slug,
+    status: post.status,
+    excerpt: post.excerpt,
+    featured_image: post.featured_image,
+    meta_data: post.meta_data,
+    published: post.published,
+    published_at: post.published_at,
+    scheduled_at: post.scheduled_at,
+    view_count: post.view_count,
+    reading_time_minutes: post.reading_time_minutes,
+    created_at: post.created_at,
+    updated_at: post.updated_at,
+    version: post.version,
+    author_id: post.author_id,
+    category_id: post.category_id,
+    category: post.blog_categories || null,
+    tag_ids: (post.blog_post_tags || []).map((r: any) => r.tag_id),
+    author_name: post.users?.full_name || 'Unknown',
+    author_email: post.users?.email || null
+  }))
+
+  return res.json({
+    tag: {
+      id: tag.id,
+      name: tag.name,
+      slug: tag.slug
+    },
+    posts: postsWithData,
+    total: postsWithData.length
   })
 })

@@ -25,8 +25,8 @@ The Blog Pages API provides endpoints for creating, reading, updating, and delet
   content: object (JSONB)      // Rich content (blocks, paragraphs, etc.)
   excerpt?: string             // Short description/preview
   featured_image?: string      // Image URL
-  tags?: string[]              // Tags for filtering
-  category?: string            // Primary category
+  tags?: string[]              // Tag slugs for filtering (e.g., ["javascript", "nodejs"])
+  category?: string            // Category slug (e.g., "technology", "business")
   meta_data?: object (JSONB)   // SEO metadata
   published: boolean           // Back-compat published flag
   published_at?: timestamp     // When it was published
@@ -217,14 +217,23 @@ Authorization: Bearer <token>
   },
   "excerpt": "Our first post introducing the blog.",
   "featured_image": "https://cdn.example.com/hero.jpg",
-  "tags": ["announcement"],
-  "category": "News",
+  "tags": ["announcement", "news"],
+  "category": "general",
   "meta_data": {
     "description": "An introduction post"
   },
   "status": "draft"
 }
 ```
+
+**Important Notes:**
+- `category` (string, optional): Use the category **slug** (e.g., "technology", "business"), not the UUID
+  - Backend automatically resolves the slug to the category ID
+  - Returns `400 Bad Request` if category doesn't exist
+- `tags` (array of strings, optional): Use tag **slugs** (e.g., ["javascript", "nodejs"]), not UUIDs
+  - Backend automatically resolves all slugs to tag IDs
+  - Returns `400 Bad Request` if any tag doesn't exist
+- Create categories and tags first using `/api/categories` and `/api/tags` endpoints
 
 **Response** (201):
 ```json
@@ -266,9 +275,17 @@ Authorization: Bearer <token>
       { "type": "paragraph", "content": "Updated content" }
     ]
   },
+  "category": "tutorials",
+  "tags": ["announcement", "update"],
   "status": "published"
 }
 ```
+
+**Important Notes:**
+- At least one field is required for update
+- `category` (string, optional): Use category slug; set to `null` or `""` to remove category
+- `tags` (array of strings, optional): Use tag slugs; set to `[]` to remove all tags
+- Backend validates that category and tags exist before updating
 
 **Response** (200):
 ```json
