@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>View Blog Posts</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: Arial, sans-serif;
+        background: #f5f5f5;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      h1 {
+        margin-bottom: 20px;
+        color: #333;
+      }
+
+      .controls {
+        margin-bottom: 20px;
+        display: flex;
+        gap: 10px;
+      }
+
+      button {
+        padding: 10px 20px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+
+      button:hover {
+        background: #5568d3;
+      }
+
+      .message {
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        display: none;
+      }
+
+      .message.success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+
+      .message.error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+
+      .message.info {
+        background: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+      }
+
+      .spinner {
+        display: inline-block;
+        width: 30px;
+        height: 30px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .blog-list {
+        display: flex;
+        flex-direction: column;
+        gap: 30px;
+      }
+
+      .blog-item {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        background: #fafafa;
+      }
+
+      .blog-item h2 {
+        color: #333;
+        margin-bottom: 10px;
+        font-size: 24px;
+      }
+
+      .blog-meta {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 15px;
+        font-size: 14px;
+        color: #666;
+        flex-wrap: wrap;
+      }
+
+      .meta-item {
+        display: flex;
+        gap: 5px;
+      }
+
+      .meta-item strong {
+        color: #333;
+      }
+
+      .featured-image {
+        margin: 15px 0;
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+        max-height: 300px;
+      }
+
+      .excerpt {
+        font-style: italic;
+        color: #555;
+        margin: 15px 0;
+        padding: 10px;
+        background: white;
+        border-left: 3px solid #667eea;
+      }
+
+      .category-tag {
+        display: inline-block;
+        background: #e3f2fd;
+        color: #1976d2;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        margin-right: 5px;
+        margin-bottom: 5px;
+      }
+
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin: 10px 0;
+      }
+
+      .tag {
+        display: inline-block;
+        background: #f3e5f5;
+        color: #7b1fa2;
+        padding: 4px 8px;
+        border-radius: 15px;
+        font-size: 12px;
+      }
+
+      .content-preview {
+        background: white;
+        padding: 15px;
+        border-radius: 4px;
+        margin: 15px 0;
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #eee;
+      }
+
+      .content-preview h3 {
+        margin-top: 0;
+        color: #333;
+        font-size: 16px;
+      }
+
+      .content-preview p {
+        margin: 10px 0;
+        line-height: 1.5;
+        color: #555;
+      }
+
+      .gallery-images {
+        margin: 15px 0;
+      }
+
+      .gallery-images h4 {
+        color: #333;
+        margin-bottom: 10px;
+        font-size: 14px;
+      }
+
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 10px;
+      }
+
+      .gallery img {
+        width: 100%;
+        height: 150px;
+        object-fit: cover;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+      }
+
+      .no-data {
+        text-align: center;
+        padding: 40px;
+        color: #999;
+      }
+
+      .blog-actions {
+        margin-top: 15px;
+        display: flex;
+        gap: 10px;
+        font-size: 12px;
+      }
+
+      .blog-actions button {
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+
+      .status-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+      }
+
+      .status-published {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .status-draft {
+        background: #fff3cd;
+        color: #856404;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>📝 Blog Posts Viewer</h1>
+
+      <div class="controls">
+        <button onclick="loadBlogs()">🔄 Refresh</button>
+        <button onclick="goBack()">← Back to Dashboard</button>
+      </div>
+
+      <div id="message" class="message"></div>
+
+      <div id="content">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Loading blogs...</p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function showMessage(text, type = "info") {
+        const msg = document.getElementById("message")
+        msg.textContent = text
+        msg.className = `message ${type}`
+        msg.style.display = "block"
+      }
+
+      function hideMessage() {
+        const msg = document.getElementById("message")
+        msg.style.display = "none"
+      }
+
+      async function loadBlogs() {
+        const token = localStorage.getItem("auth_token")
+        if (!token) {
+          showMessage("No auth token found. Please login first.", "error")
+          return
+        }
+
+        showMessage("Loading blogs...", "info")
+        const contentDiv = document.getElementById("content")
+
+        try {
+          const response = await fetch("/api/blog-pages", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          }
+
+          const data = await response.json()
+          console.log("API Response:", data)
+
+          // API returns { posts: [...], total: ... }
+          const blogs = data.posts || data.data || data || []
+
+          if (!Array.isArray(blogs) || blogs.length === 0) {
+            contentDiv.innerHTML =
+              '<div class="no-data">No blog posts found. Create one first!</div>'
+            showMessage("No blogs to display", "info")
+            return
+          }
+
+          hideMessage()
+          renderBlogs(blogs)
+        } catch (error) {
+          console.error("Error loading blogs:", error)
+          showMessage(`Error loading blogs: ${error.message}`, "error")
+          contentDiv.innerHTML =
+            '<div class="no-data">Failed to load blogs. Check console for details.</div>'
+        }
+      }
+
+      function renderBlogs(blogs) {
+        const contentDiv = document.getElementById("content")
+        let html = `<div class="blog-list">`
+
+        blogs.forEach((blog, index) => {
+          const status = blog.published ? "published" : "draft"
+          const statusClass = blog.published
+            ? "status-published"
+            : "status-draft"
+          const publishedDate = blog.published_at
+            ? new Date(blog.published_at).toLocaleDateString()
+            : "Not published"
+          const createdDate = new Date(blog.created_at).toLocaleDateString()
+
+          html += `
+          <div class="blog-item">
+            <h2>${blog.title}</h2>
+            
+            <div class="blog-meta">
+              <div class="meta-item">
+                <strong>Slug:</strong> <code>${blog.slug}</code>
+              </div>
+              <div class="meta-item">
+                <strong>Status:</strong> <span class="status-badge ${statusClass}">${status.toUpperCase()}</span>
+              </div>
+              <div class="meta-item">
+                <strong>Created:</strong> ${createdDate}
+              </div>
+              ${blog.published_at ? `<div class="meta-item"><strong>Published:</strong> ${publishedDate}</div>` : ""}
+            </div>
+
+            ${typeof blog.blog_categories === "object" && blog.blog_categories?.name ? `<div style="margin: 10px 0;"><strong>Category:</strong> ${blog.blog_categories.name}</div>` : blog.category ? `<div style="margin: 10px 0;"><strong>Category:</strong> ${blog.category}</div>` : ""}
+
+            ${blog.excerpt ? `<div class="excerpt">"${blog.excerpt}"</div>` : ""}
+
+            ${blog.featured_image ? `<img src="${blog.featured_image}" alt="Featured Image" class="featured-image">` : ""}
+
+            ${renderContent(blog.content)}
+
+            ${renderGalleryImages(blog)}
+
+            <div class="blog-actions">
+              <button onclick="copyToClipboard('${blog.slug}')">📋 Copy Slug</button>
+              <button onclick="viewJSON(${index})">👁️ View JSON</button>
+              <button onclick="deleteBlog('${blog.slug}')">🗑️ Delete</button>
+            </div>
+          </div>
+        `
+        })
+
+        html += `</div>`
+        contentDiv.innerHTML = html
+      }
+
+      function renderContent(content) {
+        if (!content) return ""
+
+        let html = '<div class="content-preview"><h3>📄 Content:</h3>'
+
+        try {
+          if (typeof content === "string") {
+            content = JSON.parse(content)
+          }
+
+          if (content.blocks && Array.isArray(content.blocks)) {
+            content.blocks.slice(0, 5).forEach((block) => {
+              if (block.type === "paragraph" && block.text) {
+                html += `<p>${escapeHtml(block.text.substring(0, 200))}</p>`
+              } else if (block.type === "heading" && block.text) {
+                html += `<h4>${escapeHtml(block.text)}</h4>`
+              } else if (block.type === "list" && block.items) {
+                html += '<ul style="margin-left: 20px;">'
+                block.items.slice(0, 5).forEach((item) => {
+                  html += `<li>${escapeHtml(item)}</li>`
+                })
+                html += "</ul>"
+              }
+            })
+
+            if (content.blocks.length > 5) {
+              html += `<p><em>... and ${content.blocks.length - 5} more blocks</em></p>`
+            }
+          } else {
+            html += `<pre>${JSON.stringify(content, null, 2).substring(0, 500)}</pre>`
+          }
+        } catch (e) {
+          html += `<pre>${String(content).substring(0, 500)}</pre>`
+        }
+
+        html += "</div>"
+        return html
+      }
+
+      function renderGalleryImages(blog) {
+        let images = []
+
+        // Check meta_data.images array
+        if (
+          blog.meta_data &&
+          blog.meta_data.images &&
+          Array.isArray(blog.meta_data.images)
+        ) {
+          images = blog.meta_data.images
+        }
+
+        // Check content blocks for image types
+        if (blog.content) {
+          try {
+            let content = blog.content
+            if (typeof content === "string") {
+              content = JSON.parse(content)
+            }
+
+            if (content.blocks && Array.isArray(content.blocks)) {
+              content.blocks.forEach((block) => {
+                if (block.type === "image" && block.url) {
+                  images.push(block.url)
+                }
+              })
+            }
+          } catch (e) {
+            // Ignore JSON parse errors
+          }
+        }
+
+        if (images.length === 0) return ""
+
+        let html =
+          '<div class="gallery-images"><h4>🖼️ Gallery Images:</h4><div class="gallery">'
+        images.forEach((img) => {
+          html += `<img src="${escapeHtml(img)}" alt="Gallery image" onerror="this.alt='Image failed to load'">`
+        })
+        html += "</div></div>"
+
+        return html
+      }
+
+      function escapeHtml(text) {
+        const map = {
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#039;",
+        }
+        return String(text).replace(/[&<>"']/g, (m) => map[m])
+      }
+
+      function copyToClipboard(slug) {
+        navigator.clipboard.writeText(slug).then(() => {
+          showMessage(`Copied slug: ${slug}`, "success")
+          setTimeout(hideMessage, 3000)
+        })
+      }
+
+      function viewJSON(index) {
+        const blogs = document.querySelectorAll(".blog-item")
+        const blog = blogs[index]
+        const title = blog.querySelector("h2").textContent
+
+        const token = localStorage.getItem("auth_token")
+        if (!token) {
+          showMessage("No auth token found", "error")
+          return
+        }
+
+        const slug = blog.querySelector(".meta-item code").textContent
+        fetch(`/api/blog-pages/${slug}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+          .then((r) => r.json())
+          .then((data) => {
+            const jsonStr = JSON.stringify(data, null, 2)
+            const newWindow = window.open()
+            newWindow.document.write(
+              `<pre style="font-family:monospace; padding:20px; font-size:12px;">${escapeHtml(jsonStr)}</pre>`,
+            )
+            newWindow.document.title = `JSON: ${title}`
+          })
+          .catch((e) => showMessage(`Error: ${e.message}`, "error"))
+      }
+
+      async function deleteBlog(slug) {
+        if (!confirm(`Delete blog post "${slug}"? This cannot be undone.`)) {
+          return
+        }
+
+        const token = localStorage.getItem("auth_token")
+        if (!token) {
+          showMessage("No auth token found", "error")
+          return
+        }
+
+        try {
+          const response = await fetch(`/api/blog-pages/${slug}`, {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`)
+          }
+
+          showMessage(`Blog "${slug}" deleted successfully`, "success")
+          setTimeout(() => loadBlogs(), 1500)
+        } catch (error) {
+          showMessage(`Error deleting blog: ${error.message}`, "error")
+        }
+      }
+
+      function goBack() {
+        window.location.href = "/dashboard.html"
+      }
+
+      // Load blogs when page loads
+      document.addEventListener("DOMContentLoaded", loadBlogs)
+    </script>
+  </body>
+</html>
