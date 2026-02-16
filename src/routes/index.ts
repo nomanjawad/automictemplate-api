@@ -8,6 +8,7 @@ import userRouter from './user/index.js'
 import pagesRouter from './pages/index.js'
 import blogPagesRouter from './blog-pages/index.js'
 import customCodesRouter from './custom-codes/index.js'
+import mediaRouter from './media/index.js'
 import { categoriesRouter, tagsRouter } from './blog-categories-tags/index.js'
 
 const router = Router()
@@ -30,6 +31,9 @@ router.use('/tags', tagsRouter)
 
 // Custom Codes (analytics, meta tags, tracking, etc.)
 router.use('/custom-codes', customCodesRouter)
+
+// Media library routes
+router.use('/media', mediaRouter)
 
 // Upload routes
 router.use('/upload', uploadRouter)

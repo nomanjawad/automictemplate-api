@@ -31,6 +31,14 @@ export type {
   UpdatePageContentInput,
 } from './content.js'
 
+// Export media types
+export type {
+  MediaFolder,
+  MediaItem,
+  CreateMediaInput,
+  UpdateMediaInput,
+} from './media.js'
+
 // Export custom codes types
 export type {
   CodeType,

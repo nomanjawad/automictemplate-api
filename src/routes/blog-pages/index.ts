@@ -8,7 +8,9 @@ import {
   getBlogPostHistory,
   restoreBlogPostVersion,
   getBlogPostsByCategory,
-  getBlogPostsByTag
+  getBlogPostsByTag,
+  createBlogPostWithImages,
+  blogMediaUpload
 } from '@controllers'
 import { requireAuth } from '@middleware'
 
@@ -53,6 +55,21 @@ router.get('/:slug/history', requireAuth, getBlogPostHistory)
  * Create a new blog post
  */
 router.post('/', requireAuth, createBlogPost)
+
+/**
+ * POST /api/blog-pages/create-with-images
+ * Create a new blog post with image uploads (multipart/form-data)
+ * Fields: featured_image, images[], title, slug, content, excerpt, status, category, tags
+ */
+router.post(
+  '/create-with-images',
+  requireAuth,
+  blogMediaUpload.fields([
+    { name: 'featured_image', maxCount: 1 },
+    { name: 'images', maxCount: 10 }
+  ]),
+  createBlogPostWithImages
+)
 
 /**
  * PUT /api/blog-pages/:slug

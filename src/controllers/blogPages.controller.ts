@@ -1,4 +1,6 @@
 import { Request, Response } from 'express'
+import multer from 'multer'
+import path from 'path'
 import { supabase } from '../db/supabaseClient.js'
 import {
   logger,
@@ -12,6 +14,31 @@ import {
 } from '../utils/index.js'
 
 const validStatuses = ['draft', 'review', 'scheduled', 'published', 'archived']
+
+// Multer configuration for blog image uploads
+const storage = multer.memoryStorage()
+const fileFilter: multer.Options['fileFilter'] = (_req, file, callback) => {
+  const allowedMimeTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/svg+xml'
+  ]
+
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    callback(null, true)
+  } else {
+    callback(new Error('Invalid file type. Only images are allowed.'))
+  }
+}
+
+export const blogMediaUpload = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 2 * 1024 * 1024 } // 2MB
+})
 
 /**
  * Get all blog posts with basic metadata and author information
@@ -937,5 +964,231 @@ export const getBlogPostsByTag = asyncHandler(async (req: Request, res: Response
     },
     posts: postsWithData,
     total: postsWithData.length
+  })
+})
+
+/**
+ * Create blog post with image uploads
+ * POST /api/blog-pages/create-with-images
+ * Multipart form-data: featured_image, images[], title, slug, content, excerpt, status, category, tags
+ */
+export const createBlogPostWithImages = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user?.id
+  const authorName = req.user?.user_metadata?.full_name || req.user?.email || 'Unknown'
+
+  if (!userId) {
+    throw new ApiUnauthorizedError('User not authenticated')
+  }
+
+  const { title, slug, content, excerpt, status, category, tags } = req.body
+  const featuredImageFile = (req.files as { [fieldname: string]: Express.Multer.File[] })['featured_image']?.[0]
+  const extraImageFiles = (req.files as { [fieldname: string]: Express.Multer.File[] })['images'] || []
+
+  if (!title || !slug || !content) {
+    throw new BadRequestError('Missing required fields: title, slug, and content are required')
+  }
+
+  if (status && !validStatuses.includes(status)) {
+    throw new BadRequestError(`Invalid status. Must be one of: ${validStatuses.join(', ')}`)
+  }
+
+  if (!supabase) {
+    logger.error('Supabase client not configured')
+    throw new InternalServerError('Database service unavailable')
+  }
+
+  const BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'images'
+
+  // Upload and collect image URLs
+  const uploadedImageUrls: string[] = []
+  let featuredImageUrl: string | null = null
+
+  // Upload featured image if provided
+  if (featuredImageFile) {
+    const timestamp = Date.now()
+    const randomString = Math.random().toString(36).substring(2, 8)
+    const ext = path.extname(featuredImageFile.originalname)
+    const filename = `blog/${timestamp}-${randomString}${ext}`
+
+    const { data, error } = await supabase.storage.from(BUCKET).upload(filename, featuredImageFile.buffer, {
+      contentType: featuredImageFile.mimetype,
+      cacheControl: '3600',
+      upsert: false
+    })
+
+    if (error) {
+      logger.error('Failed to upload featured image', { error: error.message })
+      throw new ApiDatabaseError(error)
+    }
+
+    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(data.path)
+    featuredImageUrl = urlData.publicUrl
+
+    // Insert media record
+    await supabase.from('media').insert({
+      title: `Featured image for ${title}`,
+      type: 'blog',
+      author_name: authorName,
+      upload_date: new Date().toISOString(),
+      path: data.path,
+      url: featuredImageUrl,
+      size: featuredImageFile.size,
+      mime_type: featuredImageFile.mimetype
+    })
+  }
+
+  // Upload extra images if provided
+  for (const imageFile of extraImageFiles) {
+    const timestamp = Date.now()
+    const randomString = Math.random().toString(36).substring(2, 8)
+    const ext = path.extname(imageFile.originalname)
+    const filename = `blog/${timestamp}-${randomString}${ext}`
+
+    const { data, error } = await supabase.storage.from(BUCKET).upload(filename, imageFile.buffer, {
+      contentType: imageFile.mimetype,
+      cacheControl: '3600',
+      upsert: false
+    })
+
+    if (error) {
+      logger.error('Failed to upload extra image', { error: error.message })
+      throw new ApiDatabaseError(error)
+    }
+
+    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(data.path)
+    const imageUrl = urlData.publicUrl
+    uploadedImageUrls.push(imageUrl)
+
+    // Insert media record
+    await supabase.from('media').insert({
+      title: `Gallery image for ${title}`,
+      type: 'blog',
+      author_name: authorName,
+      upload_date: new Date().toISOString(),
+      path: data.path,
+      url: imageUrl,
+      size: imageFile.size,
+      mime_type: imageFile.mimetype
+    })
+  }
+
+  // Inject image URLs into content JSON
+  let contentJson: any = {}
+  if (typeof content === 'string') {
+    try {
+      contentJson = JSON.parse(content)
+    } catch {
+      contentJson = { blocks: [{ type: 'paragraph', text: content }] }
+    }
+  } else {
+    contentJson = content
+  }
+
+  // Append gallery images as blocks if content is structured
+  if (uploadedImageUrls.length > 0) {
+    if (!contentJson.blocks) {
+      contentJson.blocks = []
+    }
+    contentJson.blocks.push(
+      ...uploadedImageUrls.map(url => ({
+        type: 'image',
+        url
+      }))
+    )
+  }
+
+  // Resolve category slug to category_id
+  let categoryId: string | null = null
+  if (category) {
+    const { data: categoryData, error: categoryError } = await supabase
+      .from('blog_categories')
+      .select('id')
+      .eq('slug', category)
+      .single()
+
+    if (categoryError || !categoryData) {
+      throw new BadRequestError(`Category '${category}' not found. Please create it first.`)
+    }
+    categoryId = categoryData.id
+  }
+
+  // Resolve tag slugs to tag IDs
+  let tagIds: string[] = []
+  if (tags && Array.isArray(tags) && tags.length > 0) {
+    const { data: tagsData, error: tagsError } = await supabase
+      .from('blog_tags')
+      .select('id, slug')
+      .in('slug', tags)
+
+    if (tagsError) {
+      throw new ApiDatabaseError(tagsError)
+    }
+
+    if (!tagsData || tagsData.length !== tags.length) {
+      const foundSlugs = tagsData?.map((t: any) => t.slug) || []
+      const missingSlugs = tags.filter((t: string) => !foundSlugs.includes(t))
+      throw new BadRequestError(`Tags not found: ${missingSlugs.join(', ')}. Please create them first.`)
+    }
+
+    tagIds = tagsData.map((t: any) => t.id)
+  }
+
+  const resolvedStatus = status || 'draft'
+  const isPublished = resolvedStatus === 'published'
+
+  // Create blog post
+  const { data: post, error } = await supabase
+    .from('blog_posts')
+    .insert({
+      title,
+      slug,
+      content: contentJson,
+      excerpt: excerpt || null,
+      featured_image: featuredImageUrl,
+      meta_data: {
+        images: uploadedImageUrls
+      },
+      status: resolvedStatus,
+      published: isPublished,
+      published_at: isPublished ? new Date().toISOString() : null,
+      author_id: userId,
+      last_modified_by: userId,
+      category_id: categoryId
+    })
+    .select()
+    .single()
+
+  if (error) {
+    if (error.code === '23505') {
+      throw new ApiConflictError('A blog post with this slug already exists. Please use a different slug.')
+    }
+    logger.error('Blog post creation failed', { error: error.message, slug, userId })
+    throw new ApiDatabaseError(error)
+  }
+
+  // Add tags if provided
+  if (tagIds.length > 0) {
+    const tagRecords = tagIds.map(tagId => ({
+      blog_post_id: post.id,
+      tag_id: tagId
+    }))
+    await supabase.from('blog_post_tags').insert(tagRecords)
+  }
+
+  logger.info('Blog post with images created successfully', {
+    postId: post.id,
+    slug,
+    userId,
+    featuredImage: !!featuredImageUrl,
+    extraImages: uploadedImageUrls.length
+  })
+
+  return res.status(201).json({
+    message: 'Blog post with images created successfully',
+    post: {
+      ...post,
+      featured_image: featuredImageUrl,
+      images: uploadedImageUrls
+    }
   })
 })
