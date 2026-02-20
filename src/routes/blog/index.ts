@@ -4,13 +4,7 @@
  */
 import { Router } from 'express'
 import * as blogController from '../../controllers/blog.controller.js'
-import { requireAuth, optionalAuth, validate } from '../../middleware/index.js'
-import {
-  CreateBlogPostValidator,
-  UpdateBlogPostValidator,
-  GetBlogPostValidator,
-  ListBlogPostsValidator
-} from '../../validators/index.js'
+import { requireAuth, optionalAuth } from '../../middleware/index.js'
 
 const router = Router()
 
@@ -21,7 +15,6 @@ const router = Router()
 router.get(
   '/',
   optionalAuth,
-  validate(ListBlogPostsValidator),
   blogController.list
 )
 
@@ -32,29 +25,26 @@ router.get(
 router.get(
   '/:slug',
   optionalAuth,
-  validate(GetBlogPostValidator),
   blogController.get
 )
 
 /**
  * POST /api/blog
- * Create new blog post (requires auth + validation)
+ * Create new blog post (requires auth)
  */
 router.post(
   '/',
   requireAuth,
-  validate(CreateBlogPostValidator),
   blogController.create
 )
 
 /**
  * PUT /api/blog/:slug
- * Update blog post by slug (requires auth + validation)
+ * Update blog post by slug (requires auth)
  */
 router.put(
   '/:slug',
   requireAuth,
-  validate(UpdateBlogPostValidator),
   blogController.update
 )
 
@@ -65,7 +55,6 @@ router.put(
 router.delete(
   '/:slug',
   requireAuth,
-  validate(GetBlogPostValidator),
   blogController.remove
 )
 

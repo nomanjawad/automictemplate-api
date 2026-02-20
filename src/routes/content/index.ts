@@ -4,14 +4,7 @@
  */
 import { Router } from 'express'
 import * as contentController from '../../controllers/content.controller.js'
-import { requireAuth, optionalAuth, validate } from '../../middleware/index.js'
-import {
-  UpsertCommonContentValidator,
-  GetCommonContentValidator,
-  UpsertPageContentValidator,
-  GetPageContentValidator,
-  ListPagesValidator
-} from '../../validators/index.js'
+import { requireAuth, optionalAuth } from '../../middleware/index.js'
 
 const router = Router()
 
@@ -31,18 +24,16 @@ router.get('/common', contentController.listCommonContent)
  */
 router.get(
   '/common/:key',
-  validate(GetCommonContentValidator),
   contentController.getCommonContent
 )
 
 /**
  * PUT /api/content/common/:key
- * Create or update common content by key (requires auth + validation)
+ * Create or update common content by key (requires auth)
  */
 router.put(
   '/common/:key',
   requireAuth,
-  validate(UpsertCommonContentValidator),
   contentController.upsertCommonContent
 )
 
@@ -53,7 +44,6 @@ router.put(
 router.delete(
   '/common/:key',
   requireAuth,
-  validate(GetCommonContentValidator),
   contentController.deleteCommonContent
 )
 
@@ -68,7 +58,6 @@ router.delete(
 router.get(
   '/pages',
   optionalAuth,
-  validate(ListPagesValidator),
   contentController.listPages
 )
 
@@ -79,18 +68,16 @@ router.get(
 router.get(
   '/pages/:slug',
   optionalAuth,
-  validate(GetPageContentValidator),
   contentController.getPage
 )
 
 /**
  * PUT /api/content/pages/:slug
- * Create or update page by slug (requires auth + validation)
+ * Create or update page by slug (requires auth)
  */
 router.put(
   '/pages/:slug',
   requireAuth,
-  validate(UpsertPageContentValidator),
   contentController.upsertPage
 )
 
@@ -101,7 +88,6 @@ router.put(
 router.delete(
   '/pages/:slug',
   requireAuth,
-  validate(GetPageContentValidator),
   contentController.deleteContentPage
 )
 

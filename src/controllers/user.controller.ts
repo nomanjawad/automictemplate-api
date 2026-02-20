@@ -279,12 +279,11 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   })
 
   // Update user in public.users table
-  const { data: user, error } = await supabase
+  const { data: updatedUsers, error } = await supabase
     .from('users')
     .update(updateData)
     .eq('id', id)
     .select()
-    .single()
 
   if (error) {
     logger.error('Update query failed', { 
@@ -304,6 +303,18 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     logger.error('Failed to update user', { error: error.message, userId: id })
     throw new ApiDatabaseError(error)
   }
+
+  // Check if any rows were updated
+  if (!updatedUsers || updatedUsers.length === 0) {
+    logger.error('Update succeeded but no rows returned - likely RLS policy issue', {
+      userId: id,
+      updateData,
+      hint: 'Run the migration 20260220000001_fix_users_rls_admin_policy.sql'
+    })
+    throw new ApiNotFoundError('User update blocked by security policies. Please contact an administrator.')
+  }
+
+  const user = updatedUsers[0]
 
   logger.info('User updated successfully in database', { 
     userId: id, 

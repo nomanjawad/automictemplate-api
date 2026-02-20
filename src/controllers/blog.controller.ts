@@ -6,7 +6,6 @@
 import type { Request, Response, NextFunction } from 'express'
 import { BlogRepository } from '../repositories/index.js'
 import { NotFoundError, ValidationError } from '../utils/errors.js'
-import { BlogPostSchema } from '@atomictemplate/validations'
 
 const blogRepo = new BlogRepository()
 
@@ -61,10 +60,7 @@ export async function get(req: Request, res: Response, next: NextFunction) {
       throw new NotFoundError('Blog post not found')
     }
 
-    // Validate response to ensure it matches schema
-    const validated = BlogPostSchema.parse(post)
-
-    return res.json({ success: true, data: validated })
+    return res.json({ success: true, data: post })
   } catch (err) {
     next(err)
   }

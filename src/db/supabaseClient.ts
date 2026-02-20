@@ -30,8 +30,10 @@ if (!SUPABASE_KEY) {
 }
 
 // Warn if using anon key instead of service role key
-if (SUPABASE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NODE_ENV === 'production') {
-  logger.warn('Using SUPABASE_ANON_KEY in production - consider using SUPABASE_SERVICE_ROLE_KEY for better RLS handling')
+if (SUPABASE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  logger.warn('Using SUPABASE_ANON_KEY - RLS policies will apply. For admin operations, use SUPABASE_SERVICE_ROLE_KEY')
+} else if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  logger.info('Supabase initialized with SERVICE_ROLE_KEY - RLS bypassed for admin operations')
 }
 
 /**
@@ -50,9 +52,14 @@ export const supabase: SupabaseClient | null =
       })
     : null
 
-// Log initialization status only on failure
+// Log initialization status
 if (!supabase) {
   logger.error('Supabase client failed to initialize')
+} else {
+  logger.info('Supabase client initialized successfully', {
+    url: SUPABASE_URL,
+    keyType: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'service_role' : 'anon'
+  })
 }
 
 /**

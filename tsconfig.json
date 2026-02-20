@@ -47,12 +47,6 @@
             "@utils/*": [
                 "./src/utils/*"
             ],
-            "@validators": [
-                "./src/validators/index.ts"
-            ],
-            "@validators/*": [
-                "./src/validators/*"
-            ],
             "@config": [
                 "./src/config/index.ts"
             ]
